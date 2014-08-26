@@ -15,7 +15,7 @@ module lindblad_fit_module
     complex(dpc), dimension(:), private, allocatable     :: B
     integer(i4b) :: Nl, STEPS
     integer(i4b), private :: Lr1, Lr2, Ls1, Ls2, Lbasis, LLr1, LLr2, LLs1, LLs2, LLbasis
-    real(dp), parameter :: timeStep = 1
+    real(dp) :: timeStep = 0
     character(len=64), parameter, private :: external_dir = "external", config_filename = "config.prm", directory = "."
 
     ! basis multiplier
@@ -26,7 +26,7 @@ module lindblad_fit_module
 
     private::init_lindblad_fit
     private::clean_lindblad_fit
-    private::write_evolution_operators
+    private::read_evops
     private::open_files
     private::close_files
     private::random_test
@@ -52,11 +52,16 @@ module lindblad_fit_module
 
 
         call init_lindblad_fit()
+        call init_nakajima_zwanzig_shared(Ham)
 
         !write(*,*) indices_to_superindex(1,2,2,1,351)
         !call superindex_to_indices(indices_to_superindex(1,2,2,1,351), r,s,k,l,i)
         !write(*,*) r,s,k,l,i
         !write(*,*) 1,2,2,1,351
+
+        call open_files('E')
+        call read_evops('E', Uee)
+        call close_files('E')
 
         call create_hustomatrix(A,B)
 
@@ -141,7 +146,7 @@ module lindblad_fit_module
           A(super1,super2) = A(super1,super2) + calc(super1,i,j,k,l)*conjg(calc(super2,i,j,k,l))
 
           if(super1 == 1) then
-            !B(super2) = B(super2) + HEOM_EVOPS(i,j,k,l)*conjg(calc(super2,i,j,k,l))
+            B(super2) = B(super2) + Uee(i,j,k,l,tind)*conjg(calc(super2,i,j,k,l))
           end if
         end do
         end do
@@ -388,12 +393,14 @@ module lindblad_fit_module
 
     end function ind
 
-    subroutine write_evolution_operators(type, actual_U)
+    subroutine read_evops(type, actual_U)
       character, intent(in)      :: type
-      complex(dpc), dimension(:,:,:,:,:), intent(in)     :: actual_U
+      complex(dpc), dimension(:,:,:,:,:), intent(out)     :: actual_U
 
-      integer (i4b)       :: i
+      integer (i4b)       :: i, file_ios
       integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2
+
+      real(dp)            :: a, b, time
 
       do i=1,size(actual_U,5)
       do Uelement=1,N1_from_type(type)
@@ -401,17 +408,22 @@ module lindblad_fit_module
       do Utnemele=1,N1_from_type(type)
       do Utnemele2=1,N2_from_type(type)
 
+        read(ind(Uelement,Uelement2,Utnemele,Utnemele2,.false.),*, IOSTAT=file_ios) time, a, b
+        actual_U(Uelement,Uelement2,Utnemele,Utnemele2,i) = a + b * cmplx(0,1)
 
-        write(ind(Uelement,Uelement2,Utnemele,Utnemele2,.false.) &
-        ,*) timeStep*i,' ',real(actual_U(Uelement,Uelement2,Utnemele,Utnemele2,i)),' ',&
-                             aimag(actual_U(Uelement,Uelement2,Utnemele,Utnemele2,i))
+        if(i == 1 .and. Uelement == 1 .and. Uelement2 == 1 .and. Utnemele == 1 .and. Utnemele2 == 1) then
+          timeStep = time
+        elseif(i == 2 .and. Uelement == 1 .and. Uelement2 == 1 .and. Utnemele == 1 .and. Utnemele2 == 1) then
+          timeStep = time - timeStep
+          write(*,*) 'timeStep', timeStep
+        end if
 
       end do
       end do
       end do
       end do
       end do
-    end subroutine write_evolution_operators
+    end subroutine read_evops
 
     subroutine open_files(type)
       character, intent(in) :: type
@@ -473,8 +485,8 @@ module lindblad_fit_module
         write(no4,'(i3)')   Utnemele2
       endif
 
-      name = trim(prefix) // trim(no1) // '-'//trim(no2)//'--'// trim(no3) // '-'//trim(no4)//'X.dat'
-      open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,.false.), FILE = trim(name))
+      name = trim(prefix) // trim(no1) // '-'//trim(no2)//'--'// trim(no3) // '-'//trim(no4)//'.dat'
+      open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,.false.), FILE = trim(name), STATUS='OLD', ACTION='READ')
 
       end do
       end do
@@ -597,6 +609,7 @@ module lindblad_fit_module
 32      write(*,*) "couldn't read the supplementary config file"
         stop
     end subroutine read_config_file
+
 
 end module lindblad_fit_module
 
