@@ -10,7 +10,6 @@ module lindblad_fit_module
     ! declarations
     real(dp), dimension(:,:), allocatable  :: Ham
     complex(dpc), allocatable:: rho1(:,:), prhox1(:,:), prhodx1(:,:)
-    !complex(dpc), allocatable:: rho2(:,:), prhox2(:,:), prhodx2(:,:)
     complex(dpc), dimension(:,:,:,:,:), allocatable      :: Ueg, Uee, Ugg
     complex(dpc), dimension(:,:), private, allocatable   :: A, U, VT
     complex(dpc), dimension(:), private, allocatable     :: B
@@ -35,8 +34,6 @@ module lindblad_fit_module
     private::read_config_file
     private::Lmult1
     private::propagate1
-    !private::Lmult2
-    !private::propagate2
 
     private::read_Nsys
     private::ind
@@ -59,10 +56,32 @@ module lindblad_fit_module
         call read_evops('E', Uee)
         call close_files('E')
 
-        !call create_design_matrix(A,B)
+        call create_design_matrix(A,B)
 
         call svd(A,U,EIGVAL,VT)
 
+        write(*,*) EIGVAL
+
+        if(EIGVAL(1) <= 0) then
+          write(*,*) 'terrible error in SVD'
+          stop
+        end if
+
+        ! reciprocal eigvals
+        do i=1, size(EIGVAL)
+          if(EIGVAL(i)/EIGVAL(1) > 1e-7*size(EIGVAL)) then
+            EIGVAL(i) = 1.0_dp / EIGVAL(i)
+          else
+            EIGVAL(i) = 0.0_dp
+          end if
+        end do
+
+        write(*,*) EIGVAL
+
+        do i=1, size(EIGVAL)
+          write(*,*) dot_product(U(:,i),B)*EIGVAL(i)*conjg(VT(i,:))
+          write(*,*)
+        end do
 
     end subroutine do_lindblad_fit_work
 
@@ -288,7 +307,7 @@ module lindblad_fit_module
     end subroutine cache_lindblad_basis
 
     subroutine init_lindblad_fit()
-        STEPS = 100
+        STEPS = 500
 
         Nl = read_Nsys()
 
@@ -346,9 +365,9 @@ module lindblad_fit_module
     subroutine clean_lindblad_fit()
     end subroutine clean_lindblad_fit
 
-    subroutine Lmult1 (tt, rhoin, result)
+    subroutine Lmult1 (t, rhoin, result)
       complex(dpc), intent(in)   :: rhoin(:,:)
-      real(dp), intent(in)       :: tt
+      real(dp), intent(in)       :: t
       complex(dpc), intent(out)  :: result(:,:)
       integer(i4b) :: i
       complex(dpc), parameter:: iconst = dcmplx(0.0, 1.0)
@@ -371,7 +390,7 @@ module lindblad_fit_module
         end do
       end if
 
-      result = result * arbitrary_basis_element(tt)
+      result = result * arbitrary_basis_element(t)
 
     end subroutine Lmult1
 
@@ -405,46 +424,6 @@ module lindblad_fit_module
 
       rho1 = prhox1
     end subroutine propagate1
-
-!    subroutine Lmult2 (tt, rhoin, result)
-!      complex(dpc), intent(in)   :: rhoin(:,:)
-!      real(dp), intent(in)       :: tt ! this is a dummy parameter to satisfy ode_rk4 function template
-!      complex(dpc), intent(out)  :: result(:,:)
-!      integer(i4b) :: i
-!      complex(dpc), parameter:: iconst = dcmplx(0.0, 1.0)
-!
-!      result = 0.0_dp
-!
-!      ! we calculate this in exciton basis
-!      result = result - iconst*MATMUL(Ham, rhoin) + iconst*MATMUL(rhoin, Ham)
-!
-!      ! global Lr1, Lr2, Ls1, Ls1 must be set to desired basis element!
-!
-!      ! LLa rho LLb+
-!      result(LLr1,LLr2) = result(LLr1,LLr2) + rhoin(LLs1,LLs2)  * lindblad_basis_multiplier
-!      if(LLr2 == LLr1) then
-!        do i=1,Nl
-!          ! - LLb+ LLa rho / 2
-!          result(LLs2,i) = result(LLs2,i) - rhoin(LLs1,i) / 2   * lindblad_basis_multiplier
-!
-!          ! - rho LLb+ LLa / 2
-!          result(i,LLs1) = result(i,LLs1) - rhoin(i,LLs2) / 2   * lindblad_basis_multiplier
-!        end do
-!      end if
-!
-!    end subroutine Lmult2
-!
-!    subroutine propagate2(dt)
-!      real(dp), intent(in) :: dt
-!
-!      real(dp) :: t
-!      t = dt ! this is a dummy parameter to satisfy ode_rk4 function template
-!
-!      call Lmult2(t,rho2,prhodx2)
-!      call ode_rk4(rho2,prhodx2,t,dt,prhox2,Lmult2)
-!
-!      rho2 = prhox2
-!    end subroutine propagate2
 
     pure function ind(i,j,k,l,read) result(res)
       integer(i4b) :: res
