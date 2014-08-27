@@ -3,6 +3,7 @@ module lindblad_fit_module
     use std_types
     use helpers
     use nakajima_zwanzig_shared
+    use numer_matrix
 
     implicit none
 
@@ -10,9 +11,10 @@ module lindblad_fit_module
     real(dp), dimension(:,:), allocatable  :: Ham
     complex(dpc), allocatable:: rho1(:,:), prhox1(:,:), prhodx1(:,:)
     !complex(dpc), allocatable:: rho2(:,:), prhox2(:,:), prhodx2(:,:)
-    complex(dpc), dimension(:,:,:,:,:), allocatable   :: Ueg, Uee, Ugg
-    complex(dpc), dimension(:,:), private, allocatable   :: A
+    complex(dpc), dimension(:,:,:,:,:), allocatable      :: Ueg, Uee, Ugg
+    complex(dpc), dimension(:,:), private, allocatable   :: A, U, VT
     complex(dpc), dimension(:), private, allocatable     :: B
+    real(dp), dimension(:), private, allocatable         :: EIGVAL
     integer(i4b) :: Nl, STEPS
     integer(i4b), private :: Lr1, Lr2, Ls1, Ls2, Lbasis, LLr1, LLr2, LLs1, LLs2, LLbasis
     real(dp) :: timeStep = 0
@@ -50,20 +52,16 @@ module lindblad_fit_module
     subroutine do_lindblad_fit_work()
         integer(i4b) :: r,s,k,l,i
 
-
         call init_lindblad_fit()
         call init_nakajima_zwanzig_shared(Ham)
-
-        !write(*,*) indices_to_superindex(1,2,2,1,351)
-        !call superindex_to_indices(indices_to_superindex(1,2,2,1,351), r,s,k,l,i)
-        !write(*,*) r,s,k,l,i
-        !write(*,*) 1,2,2,1,351
 
         call open_files('E')
         call read_evops('E', Uee)
         call close_files('E')
 
-        call create_hustomatrix(A,B)
+        !call create_design_matrix(A,B)
+
+        call svd(A,U,EIGVAL,VT)
 
 
     end subroutine do_lindblad_fit_work
@@ -136,7 +134,6 @@ module lindblad_fit_module
 
          super1 = indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis)
          super2 = indices_to_superindex(LLr1,LLs1,LLr2,LLs2,LLbasis)
-         !write(*,*) super1, super2
 
         ! cycles over "false-time"
         do i=1, Nl
@@ -170,6 +167,65 @@ module lindblad_fit_module
       deallocate(calc)
 
     end subroutine create_hustomatrix
+
+    subroutine create_design_matrix(A,B)
+      complex(dpc), dimension(:,:), intent(out) :: A
+      complex(dpc), dimension(:), intent(out)   :: B
+
+      integer(i4b) :: i,j,k,l, tind, super1, super2
+
+      complex(dpc), dimension(:, :,:,:,:), allocatable :: calc
+
+      write(*,*) size(A,1), size(A,2), size(B,1)
+
+      A = 0.0_dp
+      B = 0.0_dp
+
+      write(*,*) 'allocating', Nl*Nl*Nl*Nl*Nbasis*Nl*Nl*Nl*Nl
+      allocate(calc(Nl*Nl*Nl*Nl*Nbasis,Nl,Nl,Nl,Nl))
+      calc = 0.0_dp
+
+      do tind=1,STEPS
+        write(*,*) tind, 'of', STEPS
+        call cache_lindblad_basis(calc, tind)
+
+        ! cycles over basis-functions
+        do Lr1=1, Nl
+        do Ls1=1, Nl
+        do Lr2=1, Nl
+        do Ls2=1, Nl
+        do Lbasis=1,Nbasis
+
+        ! cycles over "false-time", = the data-points
+        do i=1, Nl
+        do j=1, Nl
+        do k=1, Nl
+        do l=1, Nl
+
+          super1 = indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis)
+          super2 = indices_to_superindex(i,j,k,l,tind)
+
+          A(super2,super1) = calc(super1,i,j,k,l)
+
+          if(super1 == 1) then
+            B(super2) = Uee(i,j,k,l,tind)
+          end if
+        end do
+        end do
+        end do
+        end do
+
+        end do
+        end do
+        end do
+        end do
+        end do
+      ! over time
+      end do
+
+      deallocate(calc)
+
+    end subroutine create_design_matrix
 
     subroutine cache_lindblad_basis(calc, tind)
       complex(dpc), dimension(:, :,:,:,:), intent(inout) :: calc
@@ -232,7 +288,7 @@ module lindblad_fit_module
     end subroutine cache_lindblad_basis
 
     subroutine init_lindblad_fit()
-        STEPS = 2000
+        STEPS = 100
 
         Nl = read_Nsys()
 
@@ -250,8 +306,18 @@ module lindblad_fit_module
 !        allocate(prhox2(Nl,Nl))
 !        allocate(prhodx2(Nl,Nl))
 
-        allocate(A(Nl*Nl*Nl*Nl*Nbasis,Nl*Nl*Nl*Nl*Nbasis))
-        allocate(B(Nl*Nl*Nl*Nl*Nbasis))
+        allocate(A(Nl*Nl*Nl*Nl*STEPS,Nl*Nl*Nl*Nl*Nbasis))
+        allocate(U(Nl*Nl*Nl*Nl*STEPS,Nl*Nl*Nl*Nl*STEPS))
+        allocate(VT(Nl*Nl*Nl*Nl*Nbasis,Nl*Nl*Nl*Nl*Nbasis))
+        allocate(EIGVAL(min(Nl*Nl*Nl*Nl*STEPS,Nl*Nl*Nl*Nl*Nbasis)))
+
+        allocate(B(Nl*Nl*Nl*Nl*STEPS))
+
+        write(*,*) 'allocating matrix A of size', size(A,1), size(A,2)
+        write(*,*) 'allocating matrix U of size', size(U,1), size(U,2)
+        write(*,*) 'allocating matrix VT of size', size(VT,1), size(VT,2)
+        write(*,*) 'allocating matrix EIG of size', size(EIGVAL)
+        write(*,*) 'allocating matrix B of size', size(B,1)
 
         Ueg = 0.0_dp
         Uee = 0.0_dp

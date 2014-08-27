@@ -40,7 +40,7 @@ LindbladFit.o: ../LindbladFit.f90 helpers.o lindblad_fit_module.o numer_matrix.o
 
 helpers.o: ../helpers.f90 std_types.o
 
-lindblad_fit_module.o: ../lindblad_fit_module.f90 helpers.o nakajima_zwanzig_shared.o std_types.o
+lindblad_fit_module.o: ../lindblad_fit_module.f90 helpers.o nakajima_zwanzig_shared.o numer_matrix.o std_types.o
 
 module_goft.o: ../module_goft.f90 helpers.o nakajima_zwanzig_shared.o std_types.o
 

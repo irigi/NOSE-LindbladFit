@@ -6,7 +6,7 @@ program LindbladFit
 
   implicit none
 
-  real(dp), dimension(:,:), allocatable :: AA,BB,CC
+  complex(dpc), dimension(:,:), allocatable :: AA,BB,CC
   real(dp), dimension(:), allocatable :: DD
   integer(i4b) :: M,N
 
@@ -23,6 +23,9 @@ program LindbladFit
   call do_lindblad_fit_work()
   stop
 
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  !! debug code follows                         !!
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   if(num_args /= 2) then
     write(*,*) 'wrong number of arguments'
     stop
@@ -37,11 +40,16 @@ program LindbladFit
   allocate(DD(min(M,N)))
 
   AA = 1.0_dp
-  BB = 0.0_dp
-  BB(1,1) = 1.0_dp
-  BB(2,2) = 1.0_dp
+  !BB = 0.0_dp
+  !BB(1,1) = 1.0_dp
+  !BB(2,2) = 1.0_dp
 
   call svd(AA,BB,DD,CC)
+  write(*,*) real(BB)
+  write(*,*)
+  write(*,*) real(DD)
+  write(*,*)
+  write(*,*) real(CC)
   stop
 
 
