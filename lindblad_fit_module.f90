@@ -6,6 +6,7 @@ module lindblad_fit_module
     use numer_matrix
 
     implicit none
+    private
 
     ! declarations
     real(dp), dimension(:,:), allocatable  :: Ham
@@ -14,6 +15,7 @@ module lindblad_fit_module
     complex(dpc), dimension(:,:), private, allocatable   :: A, U, VT
     complex(dpc), dimension(:), private, allocatable     :: B
     real(dp), dimension(:), private, allocatable         :: EIGVAL
+    complex(dpc), dimension(:), private, allocatable     :: RESULT
     integer(i4b) :: Nl, STEPS
     integer(i4b), private :: Lr1, Lr2, Ls1, Ls2, Lbasis, LLr1, LLr2, LLs1, LLs2, LLbasis
     real(dp) :: timeStep = 0
@@ -21,23 +23,9 @@ module lindblad_fit_module
 
     ! basis multiplier
     real(dp), parameter :: lindblad_basis_multiplier = 0.001
-    integer(i4b) :: Nbasis = 99
+    integer(i4b), public :: Nbasis = 99
 
     public::do_lindblad_fit_work
-
-    private::init_lindblad_fit
-    private::clean_lindblad_fit
-    private::read_evops
-    private::open_files
-    private::close_files
-    private::random_test
-    private::read_config_file
-    private::Lmult1
-    private::propagate1
-
-    private::read_Nsys
-    private::ind
-
     public ::indices_to_superindex
     public ::superindex_to_indices
 
@@ -52,9 +40,9 @@ module lindblad_fit_module
         call init_lindblad_fit()
         call init_nakajima_zwanzig_shared(Ham)
 
-        call open_files('E')
+        call open_files('E', .true.)
         call read_evops('E', Uee)
-        call close_files('E')
+        call close_files('E', .true.)
 
         call create_design_matrix(A,B)
 
@@ -78,10 +66,15 @@ module lindblad_fit_module
 
         write(*,*) EIGVAL
 
+        RESULT = 0.0_dp
         do i=1, size(EIGVAL)
-          write(*,*) dot_product(U(:,i),B)*EIGVAL(i)*conjg(VT(i,:))
+          RESULT = RESULT + dot_product(U(:,i),B)*EIGVAL(i)*conjg(VT(i,:))
           write(*,*)
         end do
+
+        call open_files('E', .false.)
+        call write_fitted_evops('E')
+        call close_files('E', .false.)
 
     end subroutine do_lindblad_fit_work
 
@@ -250,7 +243,7 @@ module lindblad_fit_module
       complex(dpc), dimension(:, :,:,:,:), intent(inout) :: calc
 
       integer(i4b), intent(in) :: tind
-      integer(i4b)             :: i,j,k,l,dummy
+      integer(i4b)             :: i,j,dummy
       real(dp)                 :: time
 
       time = tind*timeStep
@@ -329,6 +322,7 @@ module lindblad_fit_module
         allocate(U(Nl*Nl*Nl*Nl*STEPS,Nl*Nl*Nl*Nl*STEPS))
         allocate(VT(Nl*Nl*Nl*Nl*Nbasis,Nl*Nl*Nl*Nl*Nbasis))
         allocate(EIGVAL(min(Nl*Nl*Nl*Nl*STEPS,Nl*Nl*Nl*Nl*Nbasis)))
+        allocate(RESULT(Nl*Nl*Nl*Nl*Nbasis))
 
         allocate(B(Nl*Nl*Nl*Nl*STEPS))
 
@@ -347,10 +341,6 @@ module lindblad_fit_module
         rho1    = 0.0_dp
         prhox1  = 0.0_dp
         prhodx1 = 0.0_dp
-
-        !rho2     = 0.0_dp
-        !prhox2   = 0.0_dp
-        !prhodx2  = 0.0_dp
 
         A = 0.0_dp
         B = 0.0_dp
@@ -453,7 +443,7 @@ module lindblad_fit_module
       do Utnemele=1,N1_from_type(type)
       do Utnemele2=1,N2_from_type(type)
 
-        read(ind(Uelement,Uelement2,Utnemele,Utnemele2,.false.),*, IOSTAT=file_ios) time, a, b
+        read(ind(Uelement,Uelement2,Utnemele,Utnemele2,.true.),*, IOSTAT=file_ios) time, a, b
         actual_U(Uelement,Uelement2,Utnemele,Utnemele2,i) = a + b * cmplx(0,1)
 
         if(i == 1 .and. Uelement == 1 .and. Uelement2 == 1 .and. Utnemele == 1 .and. Utnemele2 == 1) then
@@ -470,8 +460,68 @@ module lindblad_fit_module
       end do
     end subroutine read_evops
 
-    subroutine open_files(type)
+    subroutine write_fitted_evops(type)
+      character, intent(in)      :: type
+
+      integer(i4b) :: i,j,k,l, tind, super1, super2, file_ios
+
+      complex(dpc), dimension(:, :,:,:,:), allocatable :: calc
+      real(dp)                                         :: time
+      complex(dpc)                                     :: element
+
+
+      write(*,*) 'allocating', Nl*Nl*Nl*Nl*Nbasis*Nl*Nl*Nl*Nl
+      allocate(calc(Nl*Nl*Nl*Nl*Nbasis,Nl,Nl,Nl,Nl))
+      calc = 0.0_dp
+
+      do tind=1,STEPS
+        write(*,*) tind, 'of', STEPS
+        time = tind * timeStep
+
+        call cache_lindblad_basis(calc, tind)
+
+        ! cycles over "false-time", = the data-points
+        do i=1, Nl
+        do j=1, Nl
+        do k=1, Nl
+        do l=1, Nl
+
+        element = 0.0_dp
+
+        ! cycles over basis-functions
+        do Lr1=1, Nl
+        do Ls1=1, Nl
+        do Lr2=1, Nl
+        do Ls2=1, Nl
+        do Lbasis=1,Nbasis
+
+          super1 = indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis)
+          super2 = indices_to_superindex(i,j,k,l,tind)
+
+          element = element + calc(super1,i,j,k,l)
+
+        end do
+        end do
+        end do
+        end do
+        end do
+
+        write(ind(i,j,k,l,.false.),*, IOSTAT=file_ios) time, real(element), aimag(element)
+
+        end do
+        end do
+        end do
+        end do
+      ! over time
+      end do
+
+      deallocate(calc)
+
+    end subroutine write_fitted_evops
+
+    subroutine open_files(type,rd)
       character, intent(in) :: type
+      logical, intent(in)   :: rd
 
       integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2, Ublock
       character(len=4)    :: no1,no2,no3,no4
@@ -530,8 +580,17 @@ module lindblad_fit_module
         write(no4,'(i3)')   Utnemele2
       endif
 
-      name = trim(prefix) // trim(no1) // '-'//trim(no2)//'--'// trim(no3) // '-'//trim(no4)//'.dat'
-      open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,.false.), FILE = trim(name), STATUS='OLD', ACTION='READ')
+      if(rd) then
+
+        name = trim(prefix) // trim(no1) // '-'//trim(no2)//'--'// trim(no3) // '-'//trim(no4)//'.dat'
+        open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,rd), FILE = trim(name), STATUS='OLD', ACTION='READ')
+
+      else
+
+        name = trim(prefix) // trim(no1) // '-'//trim(no2)//'--'// trim(no3) // '-'//trim(no4)//'-out.dat'
+        open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,rd), FILE = trim(name))
+
+      end if
 
       end do
       end do
@@ -539,8 +598,10 @@ module lindblad_fit_module
       end do
     end subroutine open_files
 
-    subroutine close_files(type)
+    subroutine close_files(type,rd)
       character, intent(in) :: type
+      logical, intent(in)   :: rd
+
       integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2
 
       do Uelement=1,N1_from_type(type)
@@ -548,7 +609,7 @@ module lindblad_fit_module
       do Utnemele=1,N1_from_type(type)
       do Utnemele2=1,N2_from_type(type)
 
-      close(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,.false.))
+      close(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,rd))
 
       end do
       end do
@@ -624,7 +685,6 @@ module lindblad_fit_module
         integer(i4b), intent(in)     :: Nsys
         character(len=256)           :: buff = ""
         real(dp), dimension(Nsys)    :: value
-        real(dp)                     :: svalue
         integer(i4b)                 :: i = 0, j
 
         open(unit=32,file=trim(trim(directory)//'/'//trim(config_filename) ) , err=32, status='old')
