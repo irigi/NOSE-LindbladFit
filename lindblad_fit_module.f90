@@ -21,7 +21,7 @@ module lindblad_fit_module
 
     ! basis multiplier
     real(dp), parameter :: lindblad_basis_multiplier = 0.001
-    integer(i4b), parameter :: Nbasis = 99
+    integer(i4b) :: Nbasis = 99
 
     public::do_lindblad_fit_work
 
