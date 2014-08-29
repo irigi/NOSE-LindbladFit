@@ -28,7 +28,7 @@ all: NOSE-novy-LindbladFit
 NOSE-novy-LindbladFit: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GNU Fortran Linker'
-	gfortran  -o "NOSE-novy-LindbladFit" $(OBJS) $(USER_OBJS) $(LIBS)
+	gfortran  -o"NOSE-novy-LindbladFit" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 
