@@ -316,9 +316,9 @@ module lindblad_fit_module
       integer(i4b) :: md
       integer(i4b) :: dv
 
-      dv = (Nbasis-1) / 3
-      md = mod(Nbasis-1, 3)
-      omega = dv/1000
+      dv = (Lbasis-1) / 3
+      md = mod(Lbasis-1, 3)
+      omega = dv/1000.0
 
       if(md == 0) then
         nav = sin(omega*t)
@@ -430,6 +430,11 @@ module lindblad_fit_module
         end do
         end do
         end do
+
+          ! DEBUG
+          !super1 = indices_to_superindex(1,1,1,1,2)
+          !element = calc(super1,i,j,k,l)
+          ! DEBUG
 
         write(ind(i,j,k,l,.false.),*, IOSTAT=file_ios) time, real(element), aimag(element)
 
