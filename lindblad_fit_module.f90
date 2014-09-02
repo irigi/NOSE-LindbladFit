@@ -109,77 +109,6 @@ module lindblad_fit_module
       super = (i-1) + (j-1)*Nl + (k-1)*Nl*Nl + (l-1)*Nl*Nl*Nl + (tind-1)*Nl*Nl*Nl*Nl + 1
     end function indices_to_superindex
 
-    subroutine create_hustomatrix(A,B)
-      complex(dpc), dimension(:,:), intent(out) :: A
-      complex(dpc), dimension(:), intent(out)   :: B
-
-      integer(i4b) :: i,j,k,l, tind, dummy, super1, super2
-
-      complex(dpc), dimension(:, :,:,:,:), allocatable :: calc
-
-      write(*,*) size(A,1), size(A,2), size(B,1)
-
-      A = 0.0_dp
-      B = 0.0_dp
-
-      write(*,*) 'allocating', Nl*Nl*Nl*Nl*Nbasis*Nl*Nl*Nl*Nl
-      allocate(calc(Nl*Nl*Nl*Nl*Nbasis,Nl,Nl,Nl,Nl))
-      calc = 0.0_dp
-
-      do tind=1,STEPS
-        write(*,*) tind, 'of', STEPS
-        call cache_lindblad_basis(calc, tind)
-
-        ! cycles over basis-functions
-        do Lr1=1, Nl
-        do Ls1=1, Nl
-        do Lr2=1, Nl
-        do Ls2=1, Nl
-        do Lbasis=1,Nbasis
-
-        ! cycles over basis-functions
-        do LLbasis=1,Nbasis
-        do LLs2=1, Nl
-        do LLr2=1, Nl
-        do LLs1=1, Nl
-        do LLr1=1, Nl
-
-         super1 = indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis)
-         super2 = indices_to_superindex(LLr1,LLs1,LLr2,LLs2,LLbasis)
-
-        ! cycles over "false-time"
-        do i=1, Nl
-        do j=1, Nl
-        do k=1, Nl
-        do l=1, Nl
-          A(super1,super2) = A(super1,super2) + calc(super1,i,j,k,l)*conjg(calc(super2,i,j,k,l))
-
-          if(super1 == 1) then
-            B(super2) = B(super2) + Uee(i,j,k,l,tind)*conjg(calc(super2,i,j,k,l))
-          end if
-        end do
-        end do
-        end do
-        end do
-
-        end do
-        end do
-        end do
-        end do
-        end do
-
-        end do
-        end do
-        end do
-        end do
-        end do
-      ! over time
-      end do
-
-      deallocate(calc)
-
-    end subroutine create_hustomatrix
-
     subroutine create_design_matrix(A,B)
       complex(dpc), dimension(:,:), intent(out) :: A
       complex(dpc), dimension(:), intent(out)   :: B
@@ -313,10 +242,6 @@ module lindblad_fit_module
         allocate(rho1(Nl,Nl))
         allocate(prhox1(Nl,Nl))
         allocate(prhodx1(Nl,Nl))
-
-!        allocate(rho2(Nl,Nl))
-!        allocate(prhox2(Nl,Nl))
-!        allocate(prhodx2(Nl,Nl))
 
         allocate(A(Nl*Nl*Nl*Nl*STEPS,Nl*Nl*Nl*Nl*Nbasis))
         allocate(U(Nl*Nl*Nl*Nl*STEPS,Nl*Nl*Nl*Nl*STEPS))
@@ -498,7 +423,7 @@ module lindblad_fit_module
           super1 = indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis)
           super2 = indices_to_superindex(i,j,k,l,tind)
 
-          element = element + calc(super1,i,j,k,l)
+          element = element + calc(super1,i,j,k,l)*RESULT(super1)
 
         end do
         end do
