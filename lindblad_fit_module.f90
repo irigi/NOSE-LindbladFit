@@ -69,7 +69,6 @@ module lindblad_fit_module
         RESULT = 0.0_dp
         do i=1, size(EIGVAL)
           RESULT = RESULT + dot_product(U(:,i),B)*EIGVAL(i)*conjg(VT(i,:))
-          write(*,*)
         end do
 
         call open_files('E', .false.)
@@ -211,13 +210,13 @@ module lindblad_fit_module
       ! copy to make time step
       do i=1, Nl
       do j=1, Nl
-        rho1(:,:) = calc(indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis),i,j,:,:)
+        rho1(:,:) = calc(indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis),:,:,i,j)
 
         do dummy=1,10
           call propagate1(0.1_dp*timeStep,time + dummy*0.1*timeStep)
         end do
 
-        calc(indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis),i,j,:,:) = rho1(:,:)
+        calc(indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis),:,:,i,j) = rho1(:,:)
       end do
       end do
 
