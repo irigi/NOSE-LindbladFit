@@ -337,9 +337,9 @@ contains
   end subroutine eigsrt_real
 
   subroutine eigsrt_cmplx(d,v)
-      complex(dp), dimension(:), intent(inout)   :: d
+      complex(dpc), dimension(:), intent(inout)   :: d
       complex(dpc), dimension(:,:), intent(inout) :: v
-      complex(dp) :: dsw
+      complex(dpc) :: dsw
       complex(dpc), dimension(size(d,1)) :: vsw
 
       integer(i4b) :: i,j,k,n

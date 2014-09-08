@@ -40,12 +40,18 @@ module lindblad_fit_module
         call init_lindblad_fit()
         call init_nakajima_zwanzig_shared(Ham)
 
-        call open_files('E', .true.)
+        write(*,*) 'READING EXTERNAL EVOPS'
+        call flush()
+        call open_files('E', 'r')
         call read_evops('E', Uee)
-        call close_files('E', .true.)
+        call close_files('E', 'r')
 
+        write(*,*) 'CALCULATION OF THE DESIGN MATRIX'
+        call flush()
         call create_design_matrix(A,B)
 
+        write(*,*) 'PERFORMING SVD'
+        call flush()
         call svd(A,U,EIGVAL,VT)
 
         write(*,*) EIGVAL
@@ -71,9 +77,17 @@ module lindblad_fit_module
           RESULT = RESULT + dot_product(U(:,i),B)*EIGVAL(i)*conjg(VT(i,:))
         end do
 
-        call open_files('E', .false.)
+        write(*,*) 'OUTPUTTING EVOPS'
+        call flush()
+        call open_files('E', 'w')
         call write_fitted_evops('E')
-        call close_files('E', .false.)
+        call close_files('E', 'w')
+
+        write(*,*) 'OUTPUTTING DISS'
+        call flush()
+        call open_files('E', 'D')
+        call write_fitted_diss('E')
+        call close_files('E', 'D')
 
     end subroutine do_lindblad_fit_work
 
@@ -127,6 +141,7 @@ module lindblad_fit_module
 
       do tind=1,STEPS
         write(*,*) tind, 'of', STEPS
+        call flush()
         call cache_lindblad_basis(calc, tind)
 
         ! cycles over basis-functions
@@ -279,34 +294,43 @@ module lindblad_fit_module
     subroutine clean_lindblad_fit()
     end subroutine clean_lindblad_fit
 
-    subroutine Lmult1 (t, rhoin, result)
+    subroutine Lmult1 (t, rhoin, res)
       complex(dpc), intent(in)   :: rhoin(:,:)
       real(dp), intent(in)       :: t
-      complex(dpc), intent(out)  :: result(:,:)
-      integer(i4b) :: i
+      complex(dpc), intent(out)  :: res(:,:)
       complex(dpc), parameter:: iconst = dcmplx(0.0, 1.0)
 
-      result = 0.0_dp
+      res = 0.0_dp
 
-      result = result - iconst*MATMUL(Ham, rhoin) + iconst*MATMUL(rhoin, Ham)
+      res = res - iconst*MATMUL(Ham, rhoin) + iconst*MATMUL(rhoin, Ham)
+
+      call LmultPureLindblad(t, rhoin, res)
+
+    end subroutine Lmult1
+
+    subroutine LmultPureLindblad(t, rhoin, res)
+      complex(dpc), intent(in)   :: rhoin(:,:)
+      real(dp), intent(in)       :: t
+      complex(dpc), intent(out)  :: res(:,:)
+      integer(i4b) :: i
+      complex(dpc), parameter:: iconst = dcmplx(0.0, 1.0)
 
       ! global Lr1, Lr2, Ls1, Ls1 must be set to desired basis element!
 
       ! La rho Lb+
-      result(Lr1,Lr2) = result(Lr1,Lr2) + rhoin(Ls1,Ls2)     * lindblad_basis_multiplier
+      res(Lr1,Lr2) = res(Lr1,Lr2) + rhoin(Ls1,Ls2)     * lindblad_basis_multiplier
       if(Lr2 == Lr1) then
         do i=1,Nl
           ! - Lb+ La rho / 2
-          result(Ls2,i) = result(Ls2,i) - rhoin(Ls1,i) / 2   * lindblad_basis_multiplier
+          res(Ls2,i) = res(Ls2,i) - rhoin(Ls1,i) / 2   * lindblad_basis_multiplier
 
           ! - rho Lb+ La / 2
-          result(i,Ls1) = result(i,Ls1) - rhoin(i,Ls2) / 2   * lindblad_basis_multiplier
+          res(i,Ls1) = res(i,Ls1) - rhoin(i,Ls2) / 2   * lindblad_basis_multiplier
         end do
       end if
 
-      result = result * arbitrary_basis_element(t)
-
-    end subroutine Lmult1
+      res = res * arbitrary_basis_element(t)
+    end subroutine LmultPureLindblad
 
     real(dp) function arbitrary_basis_element(t) result(nav)
       real(dp), intent(in) :: t
@@ -339,15 +363,17 @@ module lindblad_fit_module
       rho1 = prhox1
     end subroutine propagate1
 
-    pure function ind(i,j,k,l,read) result(res)
+    pure function ind(i,j,k,l,code) result(res)
       integer(i4b) :: res
       integer(i4b), intent(in) :: i,j,k,l
-      logical, intent(in) :: read
+      character, intent(in) :: code
 
       res = 22 + i+Nl*(j-1)+Nl*Nl*(k-1)+Nl*Nl*Nl*(l-1)
 
-      if(read) then
+      if(code == 'r') then
         res = res + 10000
+      elseif(code == 'D') then
+        res = res + 20000
       end if
 
     end function ind
@@ -367,7 +393,7 @@ module lindblad_fit_module
       do Utnemele=1,N1_from_type(type)
       do Utnemele2=1,N2_from_type(type)
 
-        read(ind(Uelement,Uelement2,Utnemele,Utnemele2,.true.),*, IOSTAT=file_ios) time, a, b
+        read(ind(Uelement,Uelement2,Utnemele,Utnemele2,'r'),*, IOSTAT=file_ios) time, a, b
         actual_U(Uelement,Uelement2,Utnemele,Utnemele2,i) = a + b * cmplx(0,1)
 
         if(i == 1 .and. Uelement == 1 .and. Uelement2 == 1 .and. Utnemele == 1 .and. Utnemele2 == 1) then
@@ -400,6 +426,7 @@ module lindblad_fit_module
 
       do tind=1,STEPS
         write(*,*) tind, 'of', STEPS
+        call flush()
         time = tind * timeStep
 
         call cache_lindblad_basis(calc, tind)
@@ -430,12 +457,7 @@ module lindblad_fit_module
         end do
         end do
 
-          ! DEBUG
-          !super1 = indices_to_superindex(1,1,1,1,2)
-          !element = calc(super1,i,j,k,l)
-          ! DEBUG
-
-        write(ind(i,j,k,l,.false.),*, IOSTAT=file_ios) time, real(element), aimag(element)
+        write(ind(i,j,k,l,'w'),*, IOSTAT=file_ios) time, real(element), aimag(element)
 
         end do
         end do
@@ -448,9 +470,73 @@ module lindblad_fit_module
 
     end subroutine write_fitted_evops
 
-    subroutine open_files(type,rd)
+    subroutine write_fitted_diss(type)
+      character, intent(in)      :: type
+
+      integer(i4b) :: i,j,k,l, tind, super1, super2, file_ios
+
+      real(dp)                                         :: time
+      complex(dpc)                                     :: element
+      complex(dpc), dimension(:,:), allocatable        :: rhoin
+      complex(dpc), dimension(:,:), allocatable        :: rhoout
+
+      allocate(rhoin(Nl,Nl))
+      allocate(rhoout(Nl,Nl))
+
+      do tind=1,STEPS
+        write(*,*) tind, 'of', STEPS
+        call flush()
+        time = tind * timeStep
+
+        ! cycles over "false-time", = the data-points
+        do i=1, Nl
+        do j=1, Nl
+        do k=1, Nl
+        do l=1, Nl
+
+        element = 0.0_dp
+
+        ! cycles over basis-functions
+        do Lr1=1, Nl
+        do Ls1=1, Nl
+        do Lr2=1, Nl
+        do Ls2=1, Nl
+        do Lbasis=1,Nbasis
+
+          rhoin  = 0.0_dp
+          rhoout = 0.0_dp
+          rhoin(k,l) = 1.0_dp
+
+          super1 = indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis)
+          super2 = indices_to_superindex(i,j,k,l,tind)
+
+          call LmultPureLindblad(time, rhoin, rhoout)
+
+          element = element + rhoout(i,j)*RESULT(super1)
+
+        end do
+        end do
+        end do
+        end do
+        end do
+
+        write(ind(i,j,k,l,'D'),*, IOSTAT=file_ios) time, real(element), aimag(element)
+
+        end do
+        end do
+        end do
+        end do
+      ! over time
+      end do
+
+      deallocate(rhoin)
+      deallocate(rhoout)
+
+    end subroutine write_fitted_diss
+
+    subroutine open_files(type,code)
       character, intent(in) :: type
-      logical, intent(in)   :: rd
+      character, intent(in) :: code
 
       integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2, Ublock
       character(len=4)    :: no1,no2,no3,no4
@@ -509,15 +595,27 @@ module lindblad_fit_module
         write(no4,'(i3)')   Utnemele2
       endif
 
-      if(rd) then
+      if(code == 'r') then
 
         name = trim(prefix) // trim(no1) // '-'//trim(no2)//'--'// trim(no3) // '-'//trim(no4)//'.dat'
-        open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,rd), FILE = trim(name), STATUS='OLD', ACTION='READ')
+        open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,code), FILE = trim(name), STATUS='OLD', ACTION='READ')
 
-      else
+      elseif(code == 'w') then
 
         name = trim(prefix) // trim(no1) // '-'//trim(no2)//'--'// trim(no3) // '-'//trim(no4)//'-out.dat'
-        open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,rd), FILE = trim(name))
+        open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,code), FILE = trim(name))
+
+      elseif(code == 'D') then
+        if (type == '2') then
+          prefix = 'Diss_fe'
+        else if (type == 'E') then
+          prefix = 'Diss_ee'
+        else if (type == 'O') then
+          prefix = 'Diss_eg'
+        end if
+
+        name = trim(prefix) // trim(no1) // '-'//trim(no2)//'--'// trim(no3) // '-'//trim(no4)//'-out.dat'
+        open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,code), FILE = trim(name))
 
       end if
 
@@ -527,9 +625,9 @@ module lindblad_fit_module
       end do
     end subroutine open_files
 
-    subroutine close_files(type,rd)
+    subroutine close_files(type,code)
       character, intent(in) :: type
-      logical, intent(in)   :: rd
+      character, intent(in) :: code
 
       integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2
 
@@ -538,7 +636,7 @@ module lindblad_fit_module
       do Utnemele=1,N1_from_type(type)
       do Utnemele2=1,N2_from_type(type)
 
-      close(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,rd))
+      close(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,code))
 
       end do
       end do
