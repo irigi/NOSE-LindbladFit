@@ -11,14 +11,15 @@ module lindblad_fit_module
     ! declarations
     real(dp), dimension(:,:), allocatable  :: Ham
     complex(dpc), allocatable:: rho1(:,:), prhox1(:,:), prhodx1(:,:)
-    complex(dpc), dimension(:,:,:,:,:), allocatable      :: Ueg, Uee, Ugg
+    complex(dpc), dimension(:,:,:,:,:), allocatable      :: Ueg, Uee
     complex(dpc), dimension(:,:), private, allocatable   :: A, U, VT
     complex(dpc), dimension(:), private, allocatable     :: B
     real(dp), dimension(:), private, allocatable         :: EIGVAL
     complex(dpc), dimension(:), private, allocatable     :: RESULT
-    integer(i4b) :: Nl, STEPS
-    integer(i4b), private :: Lr1, Lr2, Ls1, Ls2, Lbasis, LLr1, LLr2, LLs1, LLs2, LLbasis
-    real(dp) :: timeStep = 0
+    integer(i4b)         :: STEPS, Nl1, Nl2, Nl
+    character, parameter :: type = 'O'
+    integer(i4b)         :: Lr1, Lr2, Ls1, Ls2, Lbasis
+    real(dp)             :: timeStep = 0
     character(len=64), parameter, private :: external_dir = "external", config_filename = "config.prm", directory = "."
 
     ! basis multiplier
@@ -38,13 +39,12 @@ module lindblad_fit_module
         integer(i4b) :: r,s,k,l,i
 
         call init_lindblad_fit()
-        call init_nakajima_zwanzig_shared(Ham)
 
         write(*,*) 'READING EXTERNAL EVOPS'
         call flush()
-        call open_files('E', 'r')
-        call read_evops('E', Uee)
-        call close_files('E', 'r')
+        call open_files(type, 'r')
+        call read_evops(type, Uee)
+        call close_files(type, 'r')
 
         write(*,*) 'CALCULATION OF THE DESIGN MATRIX'
         call flush()
@@ -79,15 +79,15 @@ module lindblad_fit_module
 
         write(*,*) 'OUTPUTTING EVOPS'
         call flush()
-        call open_files('E', 'w')
-        call write_fitted_evops('E')
-        call close_files('E', 'w')
+        call open_files(type, 'w')
+        call write_fitted_evops(type)
+        call close_files(type, 'w')
 
         write(*,*) 'OUTPUTTING DISS'
         call flush()
-        call open_files('E', 'D')
-        call write_fitted_diss('E')
-        call close_files('E', 'D')
+        call open_files(type, 'D')
+        call write_fitted_diss(type)
+        call close_files(type, 'D')
 
     end subroutine do_lindblad_fit_work
 
@@ -99,17 +99,17 @@ module lindblad_fit_module
 
       s = super - 1
 
-      i = mod(s, Nl) + 1
-      s = (s - (i-1)) / Nl
+      i = mod(s, Nl1) + 1
+      s = (s - (i-1)) / Nl1
 
-      j = mod(s, Nl) + 1
-      s = (s - (j-1)) / Nl
+      j = mod(s, Nl2) + 1
+      s = (s - (j-1)) / Nl2
 
-      k = mod(s, Nl) + 1
-      s = (s - (k-1)) / Nl
+      k = mod(s, Nl1) + 1
+      s = (s - (k-1)) / Nl1
 
-      l = mod(s, Nl) + 1
-      s = (s - (l-1)) / Nl
+      l = mod(s, Nl2) + 1
+      s = (s - (l-1)) / Nl2
 
       tind = s + 1
 
@@ -119,7 +119,7 @@ module lindblad_fit_module
     integer(i4b) function indices_to_superindex(i,j,k,l, tind) result(super)
       integer(i4b), intent(in) :: i,j,k,l, tind
 
-      super = (i-1) + (j-1)*Nl + (k-1)*Nl*Nl + (l-1)*Nl*Nl*Nl + (tind-1)*Nl*Nl*Nl*Nl + 1
+      super = (i-1) + (j-1)*Nl1 + (k-1)*Nl1*Nl2 + (l-1)*Nl1*Nl2*Nl1 + (tind-1)*Nl1*Nl2*Nl1*Nl2 + 1
     end function indices_to_superindex
 
     subroutine create_design_matrix(A,B)
@@ -135,8 +135,8 @@ module lindblad_fit_module
       A = 0.0_dp
       B = 0.0_dp
 
-      write(*,*) 'allocating', Nl*Nl*Nl*Nl*Nbasis*Nl*Nl*Nl*Nl
-      allocate(calc(Nl*Nl*Nl*Nl*Nbasis,Nl,Nl,Nl,Nl))
+      write(*,*) 'allocating', Nl1*Nl2*Nl1*Nl2*Nbasis*Nl1*Nl2*Nl1*Nl2
+      allocate(calc(Nl1*Nl2*Nl1*Nl2*Nbasis,Nl1,Nl2,Nl1,Nl2))
       calc = 0.0_dp
 
       do tind=1,STEPS
@@ -145,17 +145,17 @@ module lindblad_fit_module
         call cache_lindblad_basis(calc, tind)
 
         ! cycles over basis-functions
-        do Lr1=1, Nl
-        do Ls1=1, Nl
-        do Lr2=1, Nl
-        do Ls2=1, Nl
+        do Lr1=1, Nl1
+        do Ls1=1, Nl2
+        do Lr2=1, Nl1
+        do Ls2=1, Nl2
         do Lbasis=1,Nbasis
 
         ! cycles over "false-time", = the data-points
-        do i=1, Nl
-        do j=1, Nl
-        do k=1, Nl
-        do l=1, Nl
+        do i=1, Nl1
+        do j=1, Nl2
+        do k=1, Nl1
+        do l=1, Nl2
 
           super1 = indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis)
           super2 = indices_to_superindex(i,j,k,l,tind)
@@ -195,15 +195,15 @@ module lindblad_fit_module
         calc = 0.0_dp
 
         ! cycles over basis-functions
-        do Lr1=1, Nl
-        do Ls1=1, Nl
-        do Lr2=1, Nl
-        do Ls2=1, Nl
+        do Lr1=1, Nl1
+        do Ls1=1, Nl2
+        do Lr2=1, Nl1
+        do Ls2=1, Nl2
         do Lbasis=1,Nbasis
 
         ! cycles over false time
-        do i=1, Nl
-        do j=1, Nl
+        do i=1, Nl1
+        do j=1, Nl2
           calc(indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis),i,j,i,j) = 1.0_dp
         end do
         end do
@@ -216,15 +216,15 @@ module lindblad_fit_module
       end if
 
       ! cycles over basis-functions
-      do Lr1=1, Nl
-      do Ls1=1, Nl
-      do Lr2=1, Nl
-      do Ls2=1, Nl
+      do Lr1=1, Nl1
+      do Ls1=1, Nl2
+      do Lr2=1, Nl1
+      do Ls2=1, Nl2
       do Lbasis=1,Nbasis
 
       ! copy to make time step
-      do i=1, Nl
-      do j=1, Nl
+      do i=1, Nl1
+      do j=1, Nl2
         rho1(:,:) = calc(indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis),:,:,i,j)
 
         do dummy=1,10
@@ -249,21 +249,34 @@ module lindblad_fit_module
 
         allocate(Ueg(Nl, 1,Nl, 1,STEPS) )
         allocate(Uee(Nl,Nl,Nl,Nl,STEPS) )
-        allocate(Ugg(1,1,1,1,STEPS) )
 
         allocate(Ham(Nl,Nl))
 
-        allocate(rho1(Nl,Nl))
-        allocate(prhox1(Nl,Nl))
-        allocate(prhodx1(Nl,Nl))
+        Ueg = 0.0_dp
+        Uee = 0.0_dp
 
-        allocate(A(Nl*Nl*Nl*Nl*STEPS,Nl*Nl*Nl*Nl*Nbasis))
-        allocate(U(Nl*Nl*Nl*Nl*STEPS,Nl*Nl*Nl*Nl*STEPS))
-        allocate(VT(Nl*Nl*Nl*Nl*Nbasis,Nl*Nl*Nl*Nl*Nbasis))
-        allocate(EIGVAL(min(Nl*Nl*Nl*Nl*STEPS,Nl*Nl*Nl*Nl*Nbasis)))
-        allocate(RESULT(Nl*Nl*Nl*Nl*Nbasis))
+        Ham = 0.0_dp
 
-        allocate(B(Nl*Nl*Nl*Nl*STEPS))
+        call read_config_file(Nl)
+
+        write(*,*) ';Ham', Ham
+
+        call init_nakajima_zwanzig_shared(Ham)
+        Nl1 = N1_from_type(type)
+        Nl2 = N2_from_type(type)
+
+
+        allocate(rho1(Nl1,Nl2))
+        allocate(prhox1(Nl1,Nl2))
+        allocate(prhodx1(Nl1,Nl2))
+
+        allocate(A(Nl1*Nl2*Nl1*Nl2*STEPS,Nl1*Nl2*Nl1*Nl2*Nbasis))
+        allocate(U(Nl1*Nl2*Nl1*Nl2*STEPS,Nl1*Nl2*Nl1*Nl2*STEPS))
+        allocate(VT(Nl1*Nl2*Nl1*Nl2*Nbasis,Nl1*Nl2*Nl1*Nl2*Nbasis))
+        allocate(EIGVAL(min(Nl1*Nl2*Nl1*Nl2*STEPS,Nl1*Nl2*Nl1*Nl2*Nbasis)))
+        allocate(RESULT(Nl1*Nl2*Nl1*Nl2*Nbasis))
+
+        allocate(B(Nl1*Nl2*Nl1*Nl2*STEPS))
 
         write(*,*) 'allocating matrix A of size', size(A,1), size(A,2)
         write(*,*) 'allocating matrix U of size', size(U,1), size(U,2)
@@ -271,23 +284,12 @@ module lindblad_fit_module
         write(*,*) 'allocating matrix EIG of size', size(EIGVAL)
         write(*,*) 'allocating matrix B of size', size(B,1)
 
-        Ueg = 0.0_dp
-        Uee = 0.0_dp
-        Ugg = 0.0_dp
-
-        Ham = 0.0_dp
-
         rho1    = 0.0_dp
         prhox1  = 0.0_dp
         prhodx1 = 0.0_dp
 
         A = 0.0_dp
         B = 0.0_dp
-
-
-        call read_config_file(Nl)
-
-        write(*,*) ';Ham', Ham
 
     end subroutine init_lindblad_fit
 
@@ -302,7 +304,11 @@ module lindblad_fit_module
 
       res = 0.0_dp
 
-      res = res - iconst*MATMUL(Ham, rhoin) + iconst*MATMUL(rhoin, Ham)
+      if(type == 'E') then
+        res = res - iconst*MATMUL(Ham, rhoin) + iconst*MATMUL(rhoin, Ham)
+      elseif(type == 'O') then
+        res = res - iconst*MATMUL(Ham, rhoin) !+ iconst*MATMUL(rhoin, Ham)
+      end if
 
       call LmultPureLindblad(t, rhoin, res)
 
@@ -317,17 +323,29 @@ module lindblad_fit_module
 
       ! global Lr1, Lr2, Ls1, Ls1 must be set to desired basis element!
 
+     if(type == 'E') then
+
       ! La rho Lb+
       res(Lr1,Lr2) = res(Lr1,Lr2) + rhoin(Ls1,Ls2)     * lindblad_basis_multiplier
       if(Lr2 == Lr1) then
-        do i=1,Nl
+        do i=1,Nl2
           ! - Lb+ La rho / 2
           res(Ls2,i) = res(Ls2,i) - rhoin(Ls1,i) / 2   * lindblad_basis_multiplier
+        end do
 
+        do i=1,Nl1
           ! - rho Lb+ La / 2
           res(i,Ls1) = res(i,Ls1) - rhoin(i,Ls2) / 2   * lindblad_basis_multiplier
         end do
       end if
+
+     else if(type == 'O') then
+     ! here, the Lindblad basis makes no good sense, so we fit by general superoperator
+
+      ! La rho Lb+
+      res(Lr2,1) = res(Lr2,1) + rhoin(Lr1,1)     * lindblad_basis_multiplier
+
+     end if
 
       res = res * arbitrary_basis_element(t)
     end subroutine LmultPureLindblad
@@ -368,7 +386,7 @@ module lindblad_fit_module
       integer(i4b), intent(in) :: i,j,k,l
       character, intent(in) :: code
 
-      res = 22 + i+Nl*(j-1)+Nl*Nl*(k-1)+Nl*Nl*Nl*(l-1)
+      res = 22 + i+Nl1*(j-1)+Nl1*Nl2*(k-1)+Nl1*Nl2*Nl1*(l-1)
 
       if(code == 'r') then
         res = res + 10000
@@ -420,8 +438,8 @@ module lindblad_fit_module
       complex(dpc)                                     :: element
 
 
-      write(*,*) 'allocating', Nl*Nl*Nl*Nl*Nbasis*Nl*Nl*Nl*Nl
-      allocate(calc(Nl*Nl*Nl*Nl*Nbasis,Nl,Nl,Nl,Nl))
+      write(*,*) 'allocating', Nl1*Nl2*Nl1*Nl2*Nbasis*Nl1*Nl2*Nl1*Nl2
+      allocate(calc(Nl1*Nl2*Nl1*Nl2*Nbasis,Nl1,Nl2,Nl1,Nl2))
       calc = 0.0_dp
 
       do tind=1,STEPS
@@ -432,18 +450,18 @@ module lindblad_fit_module
         call cache_lindblad_basis(calc, tind)
 
         ! cycles over "false-time", = the data-points
-        do i=1, Nl
-        do j=1, Nl
-        do k=1, Nl
-        do l=1, Nl
+        do i=1, Nl1
+        do j=1, Nl2
+        do k=1, Nl1
+        do l=1, Nl2
 
         element = 0.0_dp
 
         ! cycles over basis-functions
-        do Lr1=1, Nl
-        do Ls1=1, Nl
-        do Lr2=1, Nl
-        do Ls2=1, Nl
+        do Lr1=1, Nl1
+        do Ls1=1, Nl2
+        do Lr2=1, Nl1
+        do Ls2=1, Nl2
         do Lbasis=1,Nbasis
 
           super1 = indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis)
@@ -480,8 +498,8 @@ module lindblad_fit_module
       complex(dpc), dimension(:,:), allocatable        :: rhoin
       complex(dpc), dimension(:,:), allocatable        :: rhoout
 
-      allocate(rhoin(Nl,Nl))
-      allocate(rhoout(Nl,Nl))
+      allocate(rhoin(Nl1,Nl2))
+      allocate(rhoout(Nl1,Nl2))
 
       do tind=1,STEPS
         write(*,*) tind, 'of', STEPS
@@ -489,18 +507,18 @@ module lindblad_fit_module
         time = tind * timeStep
 
         ! cycles over "false-time", = the data-points
-        do i=1, Nl
-        do j=1, Nl
-        do k=1, Nl
-        do l=1, Nl
+        do i=1, Nl1
+        do j=1, Nl2
+        do k=1, Nl1
+        do l=1, Nl2
 
         element = 0.0_dp
 
         ! cycles over basis-functions
-        do Lr1=1, Nl
-        do Ls1=1, Nl
-        do Lr2=1, Nl
-        do Ls2=1, Nl
+        do Lr1=1, Nl1
+        do Ls1=1, Nl2
+        do Lr2=1, Nl1
+        do Ls2=1, Nl2
         do Lbasis=1,Nbasis
 
           rhoin  = 0.0_dp
