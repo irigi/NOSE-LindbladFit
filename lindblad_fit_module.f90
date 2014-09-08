@@ -11,7 +11,7 @@ module lindblad_fit_module
     ! declarations
     real(dp), dimension(:,:), allocatable  :: Ham
     complex(dpc), allocatable:: rho1(:,:), prhox1(:,:), prhodx1(:,:)
-    complex(dpc), dimension(:,:,:,:,:), allocatable      :: Ueg, Uee
+    complex(dpc), dimension(:,:,:,:,:), allocatable      :: Evops
     complex(dpc), dimension(:,:), private, allocatable   :: A, U, VT
     complex(dpc), dimension(:), private, allocatable     :: B
     real(dp), dimension(:), private, allocatable         :: EIGVAL
@@ -43,7 +43,7 @@ module lindblad_fit_module
         write(*,*) 'READING EXTERNAL EVOPS'
         call flush()
         call open_files('r')
-        call read_evops(Uee)
+        call read_evops(Evops)
         call close_files('r')
 
         write(*,*) 'CALCULATION OF THE DESIGN MATRIX'
@@ -163,7 +163,7 @@ module lindblad_fit_module
           A(super2,super1) = calc(super1,i,j,k,l)
 
           if(super1 == 1) then
-            B(super2) = Uee(i,j,k,l,tind)
+            B(super2) = Evops(i,j,k,l,tind)
           end if
         end do
         end do
@@ -247,13 +247,7 @@ module lindblad_fit_module
 
         Nl = read_Nsys()
 
-        allocate(Ueg(Nl, 1,Nl, 1,STEPS) )
-        allocate(Uee(Nl,Nl,Nl,Nl,STEPS) )
-
         allocate(Ham(Nl,Nl))
-
-        Ueg = 0.0_dp
-        Uee = 0.0_dp
 
         Ham = 0.0_dp
 
@@ -269,6 +263,8 @@ module lindblad_fit_module
         allocate(rho1(Nl1,Nl2))
         allocate(prhox1(Nl1,Nl2))
         allocate(prhodx1(Nl1,Nl2))
+
+        allocate(Evops(Nl1,Nl2,Nl1,Nl2,STEPS) )
 
         allocate(A(Nl1*Nl2*Nl1*Nl2*STEPS,Nl1*Nl2*Nl1*Nl2*Nbasis))
         allocate(U(Nl1*Nl2*Nl1*Nl2*STEPS,Nl1*Nl2*Nl1*Nl2*STEPS))
@@ -288,7 +284,13 @@ module lindblad_fit_module
         prhox1  = 0.0_dp
         prhodx1 = 0.0_dp
 
+        Evops = 0.0_dp
+
         A = 0.0_dp
+        U = 0.0_dp
+        VT = 0.0_dp
+        EIGVAL = 0.0_dp
+        RESULT = 0.0_dp
         B = 0.0_dp
 
     end subroutine init_lindblad_fit
@@ -431,13 +433,15 @@ module lindblad_fit_module
       integer(i4b) :: i,j,k,l, tind, super1, super2, file_ios
 
       complex(dpc), dimension(:, :,:,:,:), allocatable :: calc
-      real(dp)                                         :: time
+      real(dp)                                         :: time, chisq
       complex(dpc)                                     :: element
 
 
       write(*,*) 'allocating', Nl1*Nl2*Nl1*Nl2*Nbasis*Nl1*Nl2*Nl1*Nl2
       allocate(calc(Nl1*Nl2*Nl1*Nl2*Nbasis,Nl1,Nl2,Nl1,Nl2))
       calc = 0.0_dp
+
+      chisq = 0.0_dp
 
       do tind=1,STEPS
         write(*,*) tind, 'of', STEPS
@@ -474,6 +478,8 @@ module lindblad_fit_module
 
         write(ind(i,j,k,l,'w'),*, IOSTAT=file_ios) time, real(element), aimag(element)
 
+        chisq = chisq + (abs(Evops(i,j,k,l,tind) - element)*timeStep)**2
+
         end do
         end do
         end do
@@ -482,6 +488,8 @@ module lindblad_fit_module
       end do
 
       deallocate(calc)
+
+      write(*,*) 'ACHIEVED CHI-SQUARE:', chisq
 
     end subroutine write_fitted_evops
 
