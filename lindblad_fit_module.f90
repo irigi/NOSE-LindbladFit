@@ -42,9 +42,9 @@ module lindblad_fit_module
 
         write(*,*) 'READING EXTERNAL EVOPS'
         call flush()
-        call open_files(type, 'r')
-        call read_evops(type, Uee)
-        call close_files(type, 'r')
+        call open_files('r')
+        call read_evops(Uee)
+        call close_files('r')
 
         write(*,*) 'CALCULATION OF THE DESIGN MATRIX'
         call flush()
@@ -79,15 +79,15 @@ module lindblad_fit_module
 
         write(*,*) 'OUTPUTTING EVOPS'
         call flush()
-        call open_files(type, 'w')
-        call write_fitted_evops(type)
-        call close_files(type, 'w')
+        call open_files('w')
+        call write_fitted_evops()
+        call close_files('w')
 
         write(*,*) 'OUTPUTTING DISS'
         call flush()
-        call open_files(type, 'D')
-        call write_fitted_diss(type)
-        call close_files(type, 'D')
+        call open_files('D')
+        call write_fitted_diss()
+        call close_files('D')
 
     end subroutine do_lindblad_fit_work
 
@@ -396,8 +396,7 @@ module lindblad_fit_module
 
     end function ind
 
-    subroutine read_evops(type, actual_U)
-      character, intent(in)      :: type
+    subroutine read_evops(actual_U)
       complex(dpc), dimension(:,:,:,:,:), intent(out)     :: actual_U
 
       integer (i4b)       :: i, file_ios
@@ -428,9 +427,7 @@ module lindblad_fit_module
       end do
     end subroutine read_evops
 
-    subroutine write_fitted_evops(type)
-      character, intent(in)      :: type
-
+    subroutine write_fitted_evops()
       integer(i4b) :: i,j,k,l, tind, super1, super2, file_ios
 
       complex(dpc), dimension(:, :,:,:,:), allocatable :: calc
@@ -488,9 +485,7 @@ module lindblad_fit_module
 
     end subroutine write_fitted_evops
 
-    subroutine write_fitted_diss(type)
-      character, intent(in)      :: type
-
+    subroutine write_fitted_diss()
       integer(i4b) :: i,j,k,l, tind, super1, super2, file_ios
 
       real(dp)                                         :: time
@@ -552,8 +547,7 @@ module lindblad_fit_module
 
     end subroutine write_fitted_diss
 
-    subroutine open_files(type,code)
-      character, intent(in) :: type
+    subroutine open_files(code)
       character, intent(in) :: code
 
       integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2, Ublock
@@ -643,8 +637,7 @@ module lindblad_fit_module
       end do
     end subroutine open_files
 
-    subroutine close_files(type,code)
-      character, intent(in) :: type
+    subroutine close_files(code)
       character, intent(in) :: code
 
       integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2
