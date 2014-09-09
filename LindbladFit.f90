@@ -20,11 +20,12 @@ program LindbladFit
       call get_command_argument(ix,args(ix))
   end do
 
-  if(num_args /= 1) then
+  if(num_args /= 2) then
     write(*,*) 'wrong number of arguments'
     stop
   else
     read( args(1), '(i10)' ) Nbasis
+    read( args(2), '(i10)' ) STEPS
   end if
 
   call do_lindblad_fit_work()

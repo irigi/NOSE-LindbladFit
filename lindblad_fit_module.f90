@@ -16,15 +16,15 @@ module lindblad_fit_module
     complex(dpc), dimension(:), private, allocatable     :: B
     real(dp), dimension(:), private, allocatable         :: EIGVAL
     complex(dpc), dimension(:), private, allocatable     :: RESULT
-    integer(i4b)         :: STEPS, Nl1, Nl2, Nl
-    character, parameter :: type = 'O'
+    integer(i4b)         :: Nl1, Nl2, Nl
+    character, parameter :: type = 'E'
     integer(i4b)         :: Lr1, Lr2, Ls1, Ls2, Lbasis
     real(dp)             :: timeStep = 0
     character(len=64), parameter, private :: external_dir = "external", config_filename = "config.prm", directory = "."
 
     ! basis multiplier
     real(dp), parameter :: lindblad_basis_multiplier = 0.001
-    integer(i4b), public :: Nbasis = 99
+    integer(i4b), public :: Nbasis = 99, STEPS = 500
 
     public::do_lindblad_fit_work
     public ::indices_to_superindex
@@ -243,8 +243,6 @@ module lindblad_fit_module
     end subroutine cache_lindblad_basis
 
     subroutine init_lindblad_fit()
-        STEPS = 500
-
         Nl = read_Nsys()
 
         allocate(Ham(Nl,Nl))
