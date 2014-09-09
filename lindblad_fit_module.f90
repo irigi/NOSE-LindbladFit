@@ -26,9 +26,12 @@ module lindblad_fit_module
     real(dp), parameter :: lindblad_basis_multiplier = 0.001
     integer(i4b), public :: Nbasis = 99, STEPS = 500
 
+    logical, parameter :: to_exciton_at_output = .false.
+
     public::do_lindblad_fit_work
-    public ::indices_to_superindex
-    public ::superindex_to_indices
+    public::indices_to_superindex
+    public::superindex_to_indices
+    public::only_convert_to_exciton
 
     contains
 
@@ -43,7 +46,7 @@ module lindblad_fit_module
         write(*,*) 'READING EXTERNAL EVOPS'
         call flush()
         call open_files('r')
-        call read_evops(Evops)
+        call read_evops()
         call close_files('r')
 
         write(*,*) 'CALCULATION OF THE DESIGN MATRIX'
@@ -90,6 +93,29 @@ module lindblad_fit_module
         call close_files('D')
 
     end subroutine do_lindblad_fit_work
+
+    subroutine only_convert_to_exciton()
+        integer(i4b) :: r
+
+        call init_lindblad_fit()
+
+        write(*,*) 'READING EXTERNAL EVOPS'
+        call flush()
+        call open_files('r')
+        call read_evops()
+        call close_files('r')
+
+        do r=1,STEPS
+          call superops_to_exc_4indexed(Evops(:,:,:,:,r),type)
+        end do
+
+        write(*,*) 'OUTPUTTING EVOPS'
+        call flush()
+        call open_files('w')
+        call write_evops()
+        call close_files('w')
+
+    end subroutine only_convert_to_exciton
 
     subroutine superindex_to_indices(super, i,j,k,l, tind)
       integer(i4b), intent(in)  :: super
@@ -396,23 +422,22 @@ module lindblad_fit_module
 
     end function ind
 
-    subroutine read_evops(actual_U)
-      complex(dpc), dimension(:,:,:,:,:), intent(out)     :: actual_U
-
+    subroutine read_evops()
       integer (i4b)       :: i, file_ios
       integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2
 
       real(dp)            :: a, b, time
 
-      do i=1,size(actual_U,5)
-      do Uelement=1,N1_from_type(type)
-      do Uelement2=1,N2_from_type(type)
-      do Utnemele=1,N1_from_type(type)
-      do Utnemele2=1,N2_from_type(type)
+      do i=1,size(Evops,5)
+      do Uelement=1,Nl1
+      do Uelement2=1,Nl2
+      do Utnemele=1,Nl1
+      do Utnemele2=1,Nl2
 
         read(ind(Uelement,Uelement2,Utnemele,Utnemele2,'r'),*, IOSTAT=file_ios) time, a, b
-        actual_U(Uelement,Uelement2,Utnemele,Utnemele2,i) = a + b * cmplx(0,1)
+        Evops(Uelement,Uelement2,Utnemele,Utnemele2,i) = a + b * cmplx(0,1)
 
+        ! read timestep from the Evops
         if(i == 1 .and. Uelement == 1 .and. Uelement2 == 1 .and. Utnemele == 1 .and. Utnemele2 == 1) then
           timeStep = time
         elseif(i == 2 .and. Uelement == 1 .and. Uelement2 == 1 .and. Utnemele == 1 .and. Utnemele2 == 1) then
@@ -426,6 +451,28 @@ module lindblad_fit_module
       end do
       end do
     end subroutine read_evops
+
+    subroutine write_evops()
+      integer (i4b)       :: i, file_ios
+      integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2
+
+      do i=1,size(Evops,5)
+      do Uelement=1,Nl1
+      do Uelement2=1,Nl2
+      do Utnemele=1,Nl1
+      do Utnemele2=1,Nl2
+
+
+        write(ind(Uelement,Uelement2,Utnemele,Utnemele2,'w'),*, IOSTAT=file_ios) timeStep*(i-1),              &
+                        real(Evops(Uelement,Uelement2,Utnemele,Utnemele2,i)),                                 &
+                        aimag(Evops(Uelement,Uelement2,Utnemele,Utnemele2,i))
+
+      end do
+      end do
+      end do
+      end do
+      end do
+    end subroutine write_evops
 
     subroutine write_fitted_evops()
       integer(i4b) :: i,j,k,l, tind, super1, super2, file_ios
@@ -474,7 +521,7 @@ module lindblad_fit_module
         end do
         end do
 
-        write(ind(i,j,k,l,'w'),*, IOSTAT=file_ios) time, real(element), aimag(element)
+        Evops(i,j,k,l,tind) = element
 
         chisq = chisq + (abs(Evops(i,j,k,l,tind) - element)*timeStep)**2
 
@@ -486,6 +533,30 @@ module lindblad_fit_module
       end do
 
       deallocate(calc)
+
+      if(to_exciton_at_output) then
+        do tind=1,STEPS
+          call superops_to_exc_4indexed(Evops(:,:,:,:,tind),type)
+        end do
+      end if
+
+      do tind=1,STEPS
+        time = tind * timeStep
+
+        ! cycles over "false-time", = the data-points
+        do i=1, Nl1
+        do j=1, Nl2
+        do k=1, Nl1
+        do l=1, Nl2
+
+        write(ind(i,j,k,l,'w'),*, IOSTAT=file_ios) time, real(Evops(i,j,k,l,tind)), aimag(Evops(i,j,k,l,tind))
+
+        end do
+        end do
+        end do
+        end do
+      ! over time
+      end do
 
       write(*,*) 'ACHIEVED CHI-SQUARE:', chisq
 
@@ -540,6 +611,7 @@ module lindblad_fit_module
         end do
 
         write(ind(i,j,k,l,'D'),*, IOSTAT=file_ios) time, real(element), aimag(element)
+        Evops(i,j,k,l,tind) = element
 
         end do
         end do
@@ -550,6 +622,30 @@ module lindblad_fit_module
 
       deallocate(rhoin)
       deallocate(rhoout)
+
+      if(to_exciton_at_output) then
+        do tind=1,STEPS
+          call superops_to_exc_4indexed(Evops(:,:,:,:,tind),type)
+        end do
+      end if
+
+      do tind=1,STEPS
+        time = tind * timeStep
+
+        ! cycles over "false-time", = the data-points
+        do i=1, Nl1
+        do j=1, Nl2
+        do k=1, Nl1
+        do l=1, Nl2
+
+        write(ind(i,j,k,l,'w'),*, IOSTAT=file_ios) time, real(Evops(i,j,k,l,tind)), aimag(Evops(i,j,k,l,tind))
+
+        end do
+        end do
+        end do
+        end do
+      ! over time
+      end do
 
     end subroutine write_fitted_diss
 
@@ -578,10 +674,10 @@ module lindblad_fit_module
         prefix = 'Evops_eg'
       end if
 
-      do Uelement=1,N1_from_type(type)
-      do Uelement2=1,N2_from_type(type)
-      do Utnemele=1,N1_from_type(type)
-      do Utnemele2=1,N2_from_type(type)
+      do Uelement=1,Nl1
+      do Uelement2=1,Nl2
+      do Utnemele=1,Nl1
+      do Utnemele2=1,Nl2
 
 
       if(Uelement < 10) then
@@ -648,10 +744,10 @@ module lindblad_fit_module
 
       integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2
 
-      do Uelement=1,N1_from_type(type)
-      do Uelement2=1,N2_from_type(type)
-      do Utnemele=1,N1_from_type(type)
-      do Utnemele2=1,N2_from_type(type)
+      do Uelement=1,Nl1
+      do Uelement2=1,Nl2
+      do Utnemele=1,Nl1
+      do Utnemele2=1,Nl2
 
       close(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,code))
 
