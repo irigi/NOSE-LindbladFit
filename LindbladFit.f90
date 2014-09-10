@@ -21,7 +21,8 @@ program LindbladFit
   end do
 
   if(num_args /= 2) then
-    call only_convert_to_exciton()
+    call rates_to_evops()
+    !call only_convert_to_exciton()
     write(*,*) 'wrong number of arguments'
     stop
   else

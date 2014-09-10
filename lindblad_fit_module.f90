@@ -26,12 +26,13 @@ module lindblad_fit_module
     real(dp), parameter :: lindblad_basis_multiplier = 0.001
     integer(i4b), public :: Nbasis = 99, STEPS = 500
 
-    logical, parameter :: to_exciton_at_output = .false.
+    logical :: to_exciton_at_output = .false., allocate_SVD = .true.
 
     public::do_lindblad_fit_work
     public::indices_to_superindex
     public::superindex_to_indices
     public::only_convert_to_exciton
+    public::rates_to_evops
 
     contains
 
@@ -97,6 +98,7 @@ module lindblad_fit_module
     subroutine only_convert_to_exciton()
         integer(i4b) :: r
 
+        allocate_SVD = .false.
         call init_lindblad_fit()
 
         write(*,*) 'READING EXTERNAL EVOPS'
@@ -290,11 +292,13 @@ module lindblad_fit_module
 
         allocate(Evops(Nl1,Nl2,Nl1,Nl2,STEPS) )
 
+        if(allocate_SVD) then
         allocate(A(Nl1*Nl2*Nl1*Nl2*STEPS,Nl1*Nl2*Nl1*Nl2*Nbasis))
         allocate(U(Nl1*Nl2*Nl1*Nl2*STEPS,Nl1*Nl2*Nl1*Nl2*STEPS))
         allocate(VT(Nl1*Nl2*Nl1*Nl2*Nbasis,Nl1*Nl2*Nl1*Nl2*Nbasis))
         allocate(EIGVAL(min(Nl1*Nl2*Nl1*Nl2*STEPS,Nl1*Nl2*Nl1*Nl2*Nbasis)))
         allocate(RESULT(Nl1*Nl2*Nl1*Nl2*Nbasis))
+        end if
 
         allocate(B(Nl1*Nl2*Nl1*Nl2*STEPS))
 
@@ -310,12 +314,14 @@ module lindblad_fit_module
 
         Evops = 0.0_dp
 
+        if(allocate_SVD) then
         A = 0.0_dp
         U = 0.0_dp
         VT = 0.0_dp
         EIGVAL = 0.0_dp
         RESULT = 0.0_dp
         B = 0.0_dp
+        end if
 
     end subroutine init_lindblad_fit
 
@@ -511,7 +517,6 @@ module lindblad_fit_module
         do Lbasis=1,Nbasis
 
           super1 = indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis)
-          super2 = indices_to_superindex(i,j,k,l,tind)
 
           element = element + calc(super1,i,j,k,l)*RESULT(super1)
 
@@ -610,7 +615,6 @@ module lindblad_fit_module
         end do
         end do
 
-        write(ind(i,j,k,l,'D'),*, IOSTAT=file_ios) time, real(element), aimag(element)
         Evops(i,j,k,l,tind) = element
 
         end do
@@ -638,7 +642,7 @@ module lindblad_fit_module
         do k=1, Nl1
         do l=1, Nl2
 
-        write(ind(i,j,k,l,'w'),*, IOSTAT=file_ios) time, real(Evops(i,j,k,l,tind)), aimag(Evops(i,j,k,l,tind))
+        write(ind(i,j,k,l,'D'),*, IOSTAT=file_ios) time, real(Evops(i,j,k,l,tind)), aimag(Evops(i,j,k,l,tind))
 
         end do
         end do
@@ -855,6 +859,51 @@ module lindblad_fit_module
         stop
     end subroutine read_config_file
 
+
+    ! testing and debugging routine
+    subroutine rates_to_evops()
+        integer(i4b) :: tind
+        real(dp)     :: time
+
+        real(dp), parameter :: &
+                    AA = 1.0/200,    &
+                    BB = 1.0/300,    &
+                    CC = 1.0/100
+
+        allocate_SVD = .false.
+        STEPS = 500
+        call init_lindblad_fit()
+
+        write(*,*) 'READING EXTERNAL EVOPS'
+        call flush()
+        call open_files('r')
+        call read_evops()
+        call close_files('r')
+
+        Evops = 0.0_dp
+
+        do tind = 1, STEPS
+
+        time = timeStep*(tind-1)
+
+        Evops(1,1,1,1,tind) = (BB + AA*exp((-AA - BB)*time))/(AA + BB)
+        Evops(2,2,1,1,tind) = -((AA*(-1 + exp((-AA - BB)*time)))/(AA + BB))
+
+        Evops(1,1,2,2,tind) = -((BB*(-1 + exp((-AA - BB)*time)))/(AA + BB))
+        Evops(2,2,2,2,tind) = (AA + BB*exp((-AA - BB)*time))/(AA + BB)
+
+        Evops(1,2,1,2,tind) = exp(-CC*time)
+        Evops(2,1,2,1,tind) = exp(-CC*time)
+
+        end do
+
+        write(*,*) 'OUTPUTTING EVOPS'
+        call flush()
+        call open_files('w')
+        call write_evops()
+        call close_files('w')
+
+    end subroutine rates_to_evops
 
 end module lindblad_fit_module
 
