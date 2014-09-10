@@ -12,6 +12,7 @@ F90_SRCS += \
 ../numer_fft.f90 \
 ../numer_fft_row.f90 \
 ../numer_matrix.f90 \
+../pokus.f90 \
 ../std_lapack.f90 \
 ../std_types.f90 
 
@@ -24,6 +25,7 @@ OBJS += \
 ./numer_fft.o \
 ./numer_fft_row.o \
 ./numer_matrix.o \
+./pokus.o \
 ./std_lapack.o \
 ./std_types.o 
 
@@ -51,6 +53,8 @@ numer_fft.o: ../numer_fft.f90 std_types.o
 numer_fft_row.o: ../numer_fft_row.f90 std_types.o
 
 numer_matrix.o: ../numer_matrix.f90 std_lapack.o std_types.o
+
+pokus.o: ../pokus.f90
 
 std_lapack.o: ../std_lapack.f90 std_types.o
 

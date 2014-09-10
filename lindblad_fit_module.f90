@@ -217,7 +217,7 @@ module lindblad_fit_module
       integer(i4b)             :: i,j,dummy
       real(dp)                 :: time
 
-      time = tind*timeStep
+      time = (tind-1)*timeStep
 
       if(tind == 1) then
         calc = 0.0_dp
@@ -481,7 +481,7 @@ module lindblad_fit_module
     end subroutine write_evops
 
     subroutine write_fitted_evops()
-      integer(i4b) :: i,j,k,l, tind, super1, super2, file_ios
+      integer(i4b) :: i,j,k,l, tind, super1, file_ios
 
       complex(dpc), dimension(:, :,:,:,:), allocatable :: calc
       real(dp)                                         :: time, chisq
@@ -497,7 +497,7 @@ module lindblad_fit_module
       do tind=1,STEPS
         write(*,*) tind, 'of', STEPS
         call flush()
-        time = tind * timeStep
+        time = (tind-1) * timeStep
 
         call cache_lindblad_basis(calc, tind)
 
@@ -546,7 +546,7 @@ module lindblad_fit_module
       end if
 
       do tind=1,STEPS
-        time = tind * timeStep
+        time = (tind-1) * timeStep
 
         ! cycles over "false-time", = the data-points
         do i=1, Nl1
@@ -568,20 +568,22 @@ module lindblad_fit_module
     end subroutine write_fitted_evops
 
     subroutine write_fitted_diss()
-      integer(i4b) :: i,j,k,l, tind, super1, super2, file_ios
+      integer(i4b) :: i,j,k,l, tind, super1, file_ios
 
       real(dp)                                         :: time
       complex(dpc)                                     :: element
       complex(dpc), dimension(:,:), allocatable        :: rhoin
-      complex(dpc), dimension(:,:), allocatable        :: rhoout
+      complex(dpc), dimension(:,:), allocatable        :: Drhoout
 
       allocate(rhoin(Nl1,Nl2))
-      allocate(rhoout(Nl1,Nl2))
+      allocate(Drhoout(Nl1,Nl2))
+
+      Evops = 0.0_dp
 
       do tind=1,STEPS
         write(*,*) tind, 'of', STEPS
         call flush()
-        time = tind * timeStep
+        time = (tind-1) * timeStep
 
         ! cycles over "false-time", = the data-points
         do i=1, Nl1
@@ -590,6 +592,8 @@ module lindblad_fit_module
         do l=1, Nl2
 
         element = 0.0_dp
+        rhoin  = 0.0_dp
+        rhoin(i,j) = 1.0_dp
 
         ! cycles over basis-functions
         do Lr1=1, Nl1
@@ -598,16 +602,13 @@ module lindblad_fit_module
         do Ls2=1, Nl2
         do Lbasis=1,Nbasis
 
-          rhoin  = 0.0_dp
-          rhoout = 0.0_dp
-          rhoin(k,l) = 1.0_dp
+          Drhoout = 0.0_dp
 
           super1 = indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis)
-          super2 = indices_to_superindex(i,j,k,l,tind)
 
-          call LmultPureLindblad(time, rhoin, rhoout)
+          call LmultPureLindblad(time, rhoin, Drhoout)
 
-          element = element + rhoout(i,j)*RESULT(super1)
+          element = element + Drhoout(k,l)*RESULT(super1)
 
         end do
         end do
@@ -625,7 +626,7 @@ module lindblad_fit_module
       end do
 
       deallocate(rhoin)
-      deallocate(rhoout)
+      deallocate(Drhoout)
 
       if(to_exciton_at_output) then
         do tind=1,STEPS
@@ -634,7 +635,7 @@ module lindblad_fit_module
       end if
 
       do tind=1,STEPS
-        time = tind * timeStep
+        time = (tind-1) * timeStep
 
         ! cycles over "false-time", = the data-points
         do i=1, Nl1
