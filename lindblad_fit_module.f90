@@ -593,7 +593,7 @@ module lindblad_fit_module
 
         element = 0.0_dp
         rhoin  = 0.0_dp
-        rhoin(i,j) = 1.0_dp
+        rhoin(k,l) = 1.0_dp
 
         ! cycles over basis-functions
         do Lr1=1, Nl1
@@ -608,7 +608,7 @@ module lindblad_fit_module
 
           call LmultPureLindblad(time, rhoin, Drhoout)
 
-          element = element + Drhoout(k,l)*RESULT(super1)
+          element = element + Drhoout(i,j)*RESULT(super1)
 
         end do
         end do
