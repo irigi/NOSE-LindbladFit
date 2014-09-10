@@ -12,13 +12,8 @@ module lindblad_fit_module
     real(dp), dimension(:,:), allocatable  :: Ham
     complex(dpc), allocatable:: rho1(:,:), prhox1(:,:), prhodx1(:,:)
     complex(dpc), dimension(:,:,:,:,:), allocatable      :: Evops
-    complex(dpc), dimension(:,:), private, allocatable   :: A, U, VT
-    complex(dpc), dimension(:), private, allocatable     :: B
-    real(dp), dimension(:), private, allocatable         :: EIGVAL
-    complex(dpc), dimension(:), private, allocatable     :: RESULT
     integer(i4b)         :: Nl1, Nl2, Nl
     character, parameter :: type = 'E'
-    integer(i4b)         :: Lr1, Lr2, Ls1, Ls2, Lbasis
     real(dp)             :: timeStep = 0
     character(len=64), parameter, private :: external_dir = "external", config_filename = "config.prm", directory = "."
 
@@ -49,37 +44,6 @@ module lindblad_fit_module
         call open_files('r')
         call read_evops()
         call close_files('r')
-
-        write(*,*) 'CALCULATION OF THE DESIGN MATRIX'
-        call flush()
-        call create_design_matrix(A,B)
-
-        write(*,*) 'PERFORMING SVD'
-        call flush()
-        call svd(A,U,EIGVAL,VT)
-
-        write(*,*) EIGVAL
-
-        if(EIGVAL(1) <= 0) then
-          write(*,*) 'terrible error in SVD'
-          stop
-        end if
-
-        ! reciprocal eigvals
-        do i=1, size(EIGVAL)
-          if(EIGVAL(i)/EIGVAL(1) > 1e-7*size(EIGVAL)) then
-            EIGVAL(i) = 1.0_dp / EIGVAL(i)
-          else
-            EIGVAL(i) = 0.0_dp
-          end if
-        end do
-
-        write(*,*) EIGVAL
-
-        RESULT = 0.0_dp
-        do i=1, size(EIGVAL)
-          RESULT = RESULT + dot_product(U(:,i),B)*EIGVAL(i)*conjg(VT(i,:))
-        end do
 
         write(*,*) 'OUTPUTTING EVOPS'
         call flush()
@@ -150,126 +114,6 @@ module lindblad_fit_module
       super = (i-1) + (j-1)*Nl1 + (k-1)*Nl1*Nl2 + (l-1)*Nl1*Nl2*Nl1 + (tind-1)*Nl1*Nl2*Nl1*Nl2 + 1
     end function indices_to_superindex
 
-    subroutine create_design_matrix(A,B)
-      complex(dpc), dimension(:,:), intent(out) :: A
-      complex(dpc), dimension(:), intent(out)   :: B
-
-      integer(i4b) :: i,j,k,l, tind, super1, super2
-
-      complex(dpc), dimension(:, :,:,:,:), allocatable :: calc
-
-      write(*,*) size(A,1), size(A,2), size(B,1)
-
-      A = 0.0_dp
-      B = 0.0_dp
-
-      write(*,*) 'allocating', Nl1*Nl2*Nl1*Nl2*Nbasis*Nl1*Nl2*Nl1*Nl2
-      allocate(calc(Nl1*Nl2*Nl1*Nl2*Nbasis,Nl1,Nl2,Nl1,Nl2))
-      calc = 0.0_dp
-
-      do tind=1,STEPS
-        write(*,*) tind, 'of', STEPS
-        call flush()
-        call cache_lindblad_basis(calc, tind)
-
-        ! cycles over basis-functions
-        do Lr1=1, Nl1
-        do Ls1=1, Nl2
-        do Lr2=1, Nl1
-        do Ls2=1, Nl2
-        do Lbasis=1,Nbasis
-
-        ! cycles over "false-time", = the data-points
-        do i=1, Nl1
-        do j=1, Nl2
-        do k=1, Nl1
-        do l=1, Nl2
-
-          super1 = indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis)
-          super2 = indices_to_superindex(i,j,k,l,tind)
-
-          A(super2,super1) = calc(super1,i,j,k,l)
-
-          if(super1 == 1) then
-            B(super2) = Evops(i,j,k,l,tind)
-          end if
-        end do
-        end do
-        end do
-        end do
-
-        end do
-        end do
-        end do
-        end do
-        end do
-      ! over time
-      end do
-
-      deallocate(calc)
-
-    end subroutine create_design_matrix
-
-    subroutine cache_lindblad_basis(calc, tind)
-      complex(dpc), dimension(:, :,:,:,:), intent(inout) :: calc
-
-      integer(i4b), intent(in) :: tind
-      integer(i4b)             :: i,j,dummy
-      real(dp)                 :: time
-
-      time = (tind-1)*timeStep
-
-      if(tind == 1) then
-        calc = 0.0_dp
-
-        ! cycles over basis-functions
-        do Lr1=1, Nl1
-        do Ls1=1, Nl2
-        do Lr2=1, Nl1
-        do Ls2=1, Nl2
-        do Lbasis=1,Nbasis
-
-        ! cycles over false time
-        do i=1, Nl1
-        do j=1, Nl2
-          calc(indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis),i,j,i,j) = 1.0_dp
-        end do
-        end do
-
-        end do
-        end do
-        end do
-        end do
-        end do
-      end if
-
-      ! cycles over basis-functions
-      do Lr1=1, Nl1
-      do Ls1=1, Nl2
-      do Lr2=1, Nl1
-      do Ls2=1, Nl2
-      do Lbasis=1,Nbasis
-
-      ! copy to make time step
-      do i=1, Nl1
-      do j=1, Nl2
-        rho1(:,:) = calc(indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis),:,:,i,j)
-
-        do dummy=1,10
-          call propagate1(0.1_dp*timeStep,time + dummy*0.1*timeStep)
-        end do
-
-        calc(indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis),:,:,i,j) = rho1(:,:)
-      end do
-      end do
-
-      end do
-      end do
-      end do
-      end do
-      end do
-    end subroutine cache_lindblad_basis
-
     subroutine init_lindblad_fit()
         Nl = read_Nsys()
 
@@ -292,36 +136,11 @@ module lindblad_fit_module
 
         allocate(Evops(Nl1,Nl2,Nl1,Nl2,STEPS) )
 
-        if(allocate_SVD) then
-        allocate(A(Nl1*Nl2*Nl1*Nl2*STEPS,Nl1*Nl2*Nl1*Nl2*Nbasis))
-        allocate(U(Nl1*Nl2*Nl1*Nl2*STEPS,Nl1*Nl2*Nl1*Nl2*STEPS))
-        allocate(VT(Nl1*Nl2*Nl1*Nl2*Nbasis,Nl1*Nl2*Nl1*Nl2*Nbasis))
-        allocate(EIGVAL(min(Nl1*Nl2*Nl1*Nl2*STEPS,Nl1*Nl2*Nl1*Nl2*Nbasis)))
-        allocate(RESULT(Nl1*Nl2*Nl1*Nl2*Nbasis))
-        end if
-
-        allocate(B(Nl1*Nl2*Nl1*Nl2*STEPS))
-
-        write(*,*) 'allocating matrix A of size', size(A,1), size(A,2)
-        write(*,*) 'allocating matrix U of size', size(U,1), size(U,2)
-        write(*,*) 'allocating matrix VT of size', size(VT,1), size(VT,2)
-        write(*,*) 'allocating matrix EIG of size', size(EIGVAL)
-        write(*,*) 'allocating matrix B of size', size(B,1)
-
         rho1    = 0.0_dp
         prhox1  = 0.0_dp
         prhodx1 = 0.0_dp
 
         Evops = 0.0_dp
-
-        if(allocate_SVD) then
-        A = 0.0_dp
-        U = 0.0_dp
-        VT = 0.0_dp
-        EIGVAL = 0.0_dp
-        RESULT = 0.0_dp
-        B = 0.0_dp
-        end if
 
     end subroutine init_lindblad_fit
 
@@ -342,66 +161,7 @@ module lindblad_fit_module
         res = res - iconst*MATMUL(Ham, rhoin) !+ iconst*MATMUL(rhoin, Ham)
       end if
 
-      call LmultPureLindblad(t, rhoin, res)
-
     end subroutine Lmult1
-
-    subroutine LmultPureLindblad(t, rhoin, res)
-      complex(dpc), intent(in)   :: rhoin(:,:)
-      real(dp), intent(in)       :: t
-      complex(dpc), intent(out)  :: res(:,:)
-      integer(i4b) :: i
-      complex(dpc), parameter:: iconst = dcmplx(0.0, 1.0)
-
-      ! global Lr1, Lr2, Ls1, Ls1 must be set to desired basis element!
-
-     if(type == 'E') then
-
-      ! La rho Lb+
-      res(Lr1,Lr2) = res(Lr1,Lr2) + rhoin(Ls1,Ls2)     * lindblad_basis_multiplier
-      if(Lr2 == Lr1) then
-        do i=1,Nl2
-          ! - Lb+ La rho / 2
-          res(Ls2,i) = res(Ls2,i) - rhoin(Ls1,i) / 2   * lindblad_basis_multiplier
-        end do
-
-        do i=1,Nl1
-          ! - rho Lb+ La / 2
-          res(i,Ls1) = res(i,Ls1) - rhoin(i,Ls2) / 2   * lindblad_basis_multiplier
-        end do
-      end if
-
-     else if(type == 'O') then
-     ! here, the Lindblad basis makes no good sense, so we fit by general superoperator
-
-      ! La rho Lb+
-      res(Lr2,1) = res(Lr2,1) + rhoin(Lr1,1)     * lindblad_basis_multiplier
-
-     end if
-
-      res = res * arbitrary_basis_element(t)
-    end subroutine LmultPureLindblad
-
-    real(dp) function arbitrary_basis_element(t) result(nav)
-      real(dp), intent(in) :: t
-
-      real(dp) :: omega
-      integer(i4b) :: md
-      integer(i4b) :: dv
-
-      dv = (Lbasis-1) / 3
-      md = mod(Lbasis-1, 3)
-      omega = dv/1000.0
-
-      if(md == 0) then
-        nav = sin(omega*t)
-      elseif(md == 1) then
-        nav = cos(omega*t)
-      else
-        nav = exp(-omega*t)
-      end if
-
-    end function arbitrary_basis_element
 
     subroutine propagate1(dt,t)
       real(dp), intent(in) :: dt
@@ -479,180 +239,6 @@ module lindblad_fit_module
       end do
       end do
     end subroutine write_evops
-
-    subroutine write_fitted_evops()
-      integer(i4b) :: i,j,k,l, tind, super1, file_ios
-
-      complex(dpc), dimension(:, :,:,:,:), allocatable :: calc
-      real(dp)                                         :: time, chisq
-      complex(dpc)                                     :: element
-
-
-      write(*,*) 'allocating', Nl1*Nl2*Nl1*Nl2*Nbasis*Nl1*Nl2*Nl1*Nl2
-      allocate(calc(Nl1*Nl2*Nl1*Nl2*Nbasis,Nl1,Nl2,Nl1,Nl2))
-      calc = 0.0_dp
-
-      chisq = 0.0_dp
-
-      do tind=1,STEPS
-        write(*,*) tind, 'of', STEPS
-        call flush()
-        time = (tind-1) * timeStep
-
-        call cache_lindblad_basis(calc, tind)
-
-        ! cycles over "false-time", = the data-points
-        do i=1, Nl1
-        do j=1, Nl2
-        do k=1, Nl1
-        do l=1, Nl2
-
-        element = 0.0_dp
-
-        ! cycles over basis-functions
-        do Lr1=1, Nl1
-        do Ls1=1, Nl2
-        do Lr2=1, Nl1
-        do Ls2=1, Nl2
-        do Lbasis=1,Nbasis
-
-          super1 = indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis)
-
-          element = element + calc(super1,i,j,k,l)*RESULT(super1)
-
-        end do
-        end do
-        end do
-        end do
-        end do
-
-        Evops(i,j,k,l,tind) = element
-
-        chisq = chisq + (abs(Evops(i,j,k,l,tind) - element)*timeStep)**2
-
-        end do
-        end do
-        end do
-        end do
-      ! over time
-      end do
-
-      deallocate(calc)
-
-      if(to_exciton_at_output) then
-        do tind=1,STEPS
-          call superops_to_exc_4indexed(Evops(:,:,:,:,tind),type)
-        end do
-      end if
-
-      do tind=1,STEPS
-        time = (tind-1) * timeStep
-
-        ! cycles over "false-time", = the data-points
-        do i=1, Nl1
-        do j=1, Nl2
-        do k=1, Nl1
-        do l=1, Nl2
-
-        write(ind(i,j,k,l,'w'),*, IOSTAT=file_ios) time, real(Evops(i,j,k,l,tind)), aimag(Evops(i,j,k,l,tind))
-
-        end do
-        end do
-        end do
-        end do
-      ! over time
-      end do
-
-      write(*,*) 'ACHIEVED CHI-SQUARE:', chisq
-
-    end subroutine write_fitted_evops
-
-    subroutine write_fitted_diss()
-      integer(i4b) :: i,j,k,l, tind, super1, file_ios
-
-      real(dp)                                         :: time
-      complex(dpc)                                     :: element
-      complex(dpc), dimension(:,:), allocatable        :: rhoin
-      complex(dpc), dimension(:,:), allocatable        :: Drhoout
-
-      allocate(rhoin(Nl1,Nl2))
-      allocate(Drhoout(Nl1,Nl2))
-
-      Evops = 0.0_dp
-
-      do tind=1,STEPS
-        write(*,*) tind, 'of', STEPS
-        call flush()
-        time = (tind-1) * timeStep
-
-        ! cycles over "false-time", = the data-points
-        do i=1, Nl1
-        do j=1, Nl2
-        do k=1, Nl1
-        do l=1, Nl2
-
-        element = 0.0_dp
-        rhoin  = 0.0_dp
-        rhoin(i,j) = 1.0_dp
-
-        ! cycles over basis-functions
-        do Lr1=1, Nl1
-        do Ls1=1, Nl2
-        do Lr2=1, Nl1
-        do Ls2=1, Nl2
-        do Lbasis=1,Nbasis
-
-          Drhoout = 0.0_dp
-
-          super1 = indices_to_superindex(Lr1,Ls1,Lr2,Ls2,Lbasis)
-
-          call LmultPureLindblad(time, rhoin, Drhoout)
-
-          element = element + Drhoout(k,l)*RESULT(super1)
-
-        end do
-        end do
-        end do
-        end do
-        end do
-
-        Evops(i,j,k,l,tind) = element
-
-        end do
-        end do
-        end do
-        end do
-      ! over time
-      end do
-
-      deallocate(rhoin)
-      deallocate(Drhoout)
-
-      if(to_exciton_at_output) then
-        do tind=1,STEPS
-          call superops_to_exc_4indexed(Evops(:,:,:,:,tind),type)
-        end do
-      end if
-
-      do tind=1,STEPS
-        time = (tind-1) * timeStep
-
-        ! cycles over "false-time", = the data-points
-        do i=1, Nl1
-        do j=1, Nl2
-        do k=1, Nl1
-        do l=1, Nl2
-
-        write(ind(i,j,k,l,'D'),*, IOSTAT=file_ios) time, real(Evops(i,j,k,l,tind)), aimag(Evops(i,j,k,l,tind))
-
-        end do
-        end do
-        end do
-        end do
-      ! over time
-      end do
-
-    end subroutine write_fitted_diss
 
     subroutine open_files(code)
       character, intent(in) :: code
@@ -761,38 +347,6 @@ module lindblad_fit_module
       end do
       end do
     end subroutine close_files
-
-    subroutine random_test()
-      real(dp)     :: r, rr, rrr
-      integer(i4b) :: i,j
-
-      write(*,*) 'Montecarlo'
-
-      call init_random_seed()
-
-      call random_number(rr)
-      call random_number(rrr)
-
-      i = 0
-      j = 0
-      do while (rr < 2)
-         i = i + 1
-         call random_number(r)
-
-         if (r == rr) then
-           write(*,*) "perioda nalezena po ", i
-           stop
-         end if
-
-         if (mod(i,100000000) == 0) then
-           i = 0
-           j = j + 1
-           write(*,*) j
-         end if
-      end do
-
-      stop
-    end subroutine random_test
 
     integer(i4b) function read_Nsys() result(Nsys)
         character(len=256)           :: buff = ""
