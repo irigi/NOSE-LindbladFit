@@ -875,7 +875,7 @@ contains
     LDVT = N
     LWORK = -1
 
-    write(*,*) m,n,lda,ldu,ldvt,lwork
+    !write(*,*) m,n,lda,ldu,ldvt,lwork
 
     ! make run to get the best LWORK
     CALL ZGESVD( 'A', 'A', M, N, AA, LDA, EIGVAL, U, LDU, VT, &
@@ -892,7 +892,7 @@ contains
     end do
     end do
 
-    write(*,*) 'allocating', LWORK
+    !write(*,*) 'allocating', LWORK
 
     allocate(WORK(LWORK))
     allocate(RWORK(5*min(size(A,1),size(A,2))))

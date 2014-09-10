@@ -56,11 +56,11 @@ module lindblad_fit_module
         call write_evops()
         call close_files('w')
 
-        !write(*,*) 'OUTPUTTING DISS'
-        !call flush()
-        !call open_files('D')
-        !call write_fitted_diss()
-        !call close_files('D')
+        !write(*,*) 'OUTPUTTING EVOPS'
+        call flush()
+        call open_files('D')
+        call write_devops()
+        call close_files('D')
 
     end subroutine do_lindblad_fit_work
 
@@ -73,7 +73,7 @@ module lindblad_fit_module
 
           call svd(Evops2,U,EIGVAL,VT)
 
-          write(*,*) EIGVAL
+          !write(*,*) EIGVAL
 
           if(EIGVAL(1) <= 0) then
             write(*,*) 'terrible error in SVD'
@@ -89,7 +89,7 @@ module lindblad_fit_module
             end if
           end do
 
-          write(*,*) EIGVAL
+          !write(*,*) EIGVAL
 
           AAA = 0.0_dp
           do i=1, size(AAA,1)
@@ -98,7 +98,9 @@ module lindblad_fit_module
 
           AAA = matmul(conjg(transpose(VT)),matmul(AAA, transpose(conjg(U))))
 
-          call superops_2indexed_to_4indexed(AAA,DEvops(:,:,:,:,tind),type)
+          AAA = matmul(dEvops2,AAA)
+
+          call superops_2indexed_to_4indexed(AAA,Evops(:,:,:,:,tind),type)
 
 
         end do
@@ -323,6 +325,28 @@ module lindblad_fit_module
       end do
     end subroutine write_evops
 
+    subroutine write_devops()
+      integer (i4b)       :: i, file_ios
+      integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2
+
+      do i=1,size(dEvops,5)
+      do Uelement=1,Nl1
+      do Uelement2=1,Nl2
+      do Utnemele=1,Nl1
+      do Utnemele2=1,Nl2
+
+
+        write(ind(Uelement,Uelement2,Utnemele,Utnemele2,'D'),*, IOSTAT=file_ios) timeStep*(i-1),              &
+                        real(dEvops(Uelement,Uelement2,Utnemele,Utnemele2,i)),                                 &
+                        aimag(dEvops(Uelement,Uelement2,Utnemele,Utnemele2,i))
+
+      end do
+      end do
+      end do
+      end do
+      end do
+    end subroutine write_devops
+
     subroutine open_files(code)
       character, intent(in) :: code
 
@@ -508,14 +532,15 @@ module lindblad_fit_module
                     BB = 1.0/300,    &
                     CC = 1.0/100
 
-        STEPS = 500
+        STEPS = 5000
         call init_lindblad_fit()
 
-        write(*,*) 'READING EXTERNAL EVOPS'
-        call flush()
-        call open_files('r')
-        call read_evops()
-        call close_files('r')
+        !write(*,*) 'READING EXTERNAL EVOPS'
+        !call flush()
+        !call open_files('r')
+        !call read_evops()
+        !call close_files('r')
+        timeStep = 0.65
 
         Evops = 0.0_dp
 
