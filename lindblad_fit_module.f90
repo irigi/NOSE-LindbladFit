@@ -11,7 +11,9 @@ module lindblad_fit_module
     ! declarations
     real(dp), dimension(:,:), allocatable  :: Ham
     complex(dpc), allocatable:: rho1(:,:), prhox1(:,:), prhodx1(:,:)
-    complex(dpc), dimension(:,:,:,:,:), allocatable      :: Evops
+    complex(dpc), dimension(:,:,:,:,:), allocatable      :: Evops, Devops
+    complex(dpc), dimension(:,:), allocatable            :: Evops2, Devops2, AAA, VT, U
+    real(dp), dimension(:), allocatable                  :: eigval
     integer(i4b)         :: Nl1, Nl2, Nl
     character, parameter :: type = 'E'
     real(dp)             :: timeStep = 0
@@ -21,7 +23,7 @@ module lindblad_fit_module
     real(dp), parameter :: lindblad_basis_multiplier = 0.001
     integer(i4b), public :: Nbasis = 99, STEPS = 500
 
-    logical :: to_exciton_at_output = .false., allocate_SVD = .true.
+    logical :: to_exciton_at_output = .false.
 
     public::do_lindblad_fit_work
     public::indices_to_superindex
@@ -39,30 +41,72 @@ module lindblad_fit_module
 
         call init_lindblad_fit()
 
-        write(*,*) 'READING EXTERNAL EVOPS'
+        !write(*,*) 'READING EXTERNAL EVOPS'
         call flush()
         call open_files('r')
         call read_evops()
         call close_files('r')
 
-        write(*,*) 'OUTPUTTING EVOPS'
+        call evops_derivative()
+        call calculate_coeff()
+
+        !write(*,*) 'OUTPUTTING EVOPS'
         call flush()
         call open_files('w')
-        call write_fitted_evops()
+        call write_evops()
         call close_files('w')
 
-        write(*,*) 'OUTPUTTING DISS'
-        call flush()
-        call open_files('D')
-        call write_fitted_diss()
-        call close_files('D')
+        !write(*,*) 'OUTPUTTING DISS'
+        !call flush()
+        !call open_files('D')
+        !call write_fitted_diss()
+        !call close_files('D')
 
     end subroutine do_lindblad_fit_work
+
+    subroutine calculate_coeff()
+        integer(i4b) :: tind, i
+
+        do tind=1,STEPS
+          call superops_4indexed_to_2indexed(Evops(:,:,:,:,tind),Evops2,type)
+          call superops_4indexed_to_2indexed(DEvops(:,:,:,:,tind),DEvops2,type)
+
+          call svd(Evops2,U,EIGVAL,VT)
+
+          write(*,*) EIGVAL
+
+          if(EIGVAL(1) <= 0) then
+            write(*,*) 'terrible error in SVD'
+            stop
+          end if
+
+          ! reciprocal eigvals
+          do i=1, size(EIGVAL)
+            if(EIGVAL(i)/EIGVAL(1) > 1e-7*size(EIGVAL)) then
+              EIGVAL(i) = 1.0_dp / EIGVAL(i)
+            else
+              EIGVAL(i) = 0.0_dp
+            end if
+          end do
+
+          write(*,*) EIGVAL
+
+          AAA = 0.0_dp
+          do i=1, size(AAA,1)
+            AAA(i,i) = EIGVAL(i)
+          end do
+
+          AAA = matmul(conjg(transpose(VT)),matmul(AAA, transpose(conjg(U))))
+
+          call superops_2indexed_to_4indexed(AAA,DEvops(:,:,:,:,tind),type)
+
+
+        end do
+    end subroutine calculate_coeff
 
     subroutine only_convert_to_exciton()
         integer(i4b) :: r
 
-        allocate_SVD = .false.
         call init_lindblad_fit()
 
         write(*,*) 'READING EXTERNAL EVOPS'
@@ -135,12 +179,28 @@ module lindblad_fit_module
         allocate(prhodx1(Nl1,Nl2))
 
         allocate(Evops(Nl1,Nl2,Nl1,Nl2,STEPS) )
+        allocate(DEvops(Nl1,Nl2,Nl1,Nl2,STEPS) )
+
+        allocate(Evops2(Nl1*Nl2,Nl1*Nl2) )
+        allocate(DEvops2(Nl1*Nl2,Nl1*Nl2) )
+        allocate(AAA(Nl1*Nl2,Nl1*Nl2) )
+        allocate(VT(Nl1*Nl2,Nl1*Nl2) )
+        allocate(U(Nl1*Nl2,Nl1*Nl2) )
+        allocate(eigval(Nl1*Nl2) )
 
         rho1    = 0.0_dp
         prhox1  = 0.0_dp
         prhodx1 = 0.0_dp
 
         Evops = 0.0_dp
+        DEvops = 0.0_dp
+
+        Evops2 = 0.0_dp
+        DEvops2 = 0.0_dp
+        AAA = 0.0_dp
+        VT = 0.0_dp
+        U = 0.0_dp
+        eigval = 0.0_dp
 
     end subroutine init_lindblad_fit
 
@@ -187,6 +247,29 @@ module lindblad_fit_module
       end if
 
     end function ind
+
+    subroutine evops_derivative()
+      integer(i4b)        :: i,j,k,l, tind
+
+      do i=1,Nl1
+      do j=1,Nl2
+      do k=1,Nl1
+      do l=1,Nl2
+      do tind=2,size(Evops,5)-1
+
+        DEvops(i,j,k,l,tind) = (Evops(i,j,k,l,tind+1) - Evops(i,j,k,l,tind-1)) / timeStep / 2
+
+      end do
+
+      DEvops(i,j,k,l,1) = DEvops(i,j,k,l,2) - (DEvops(i,j,k,l,3)-DEvops(i,j,k,l,2))
+      DEvops(i,j,k,l,size(Evops,5)) = DEvops(i,j,k,l,size(Evops,5)-1) + (DEvops(i,j,k,l,size(Evops,5)-1)-DEvops(i,j,k,l,size(Evops,5)-2))
+
+      end do
+      end do
+      end do
+      end do
+
+    end subroutine evops_derivative
 
     subroutine read_evops()
       integer (i4b)       :: i, file_ios
@@ -425,7 +508,6 @@ module lindblad_fit_module
                     BB = 1.0/300,    &
                     CC = 1.0/100
 
-        allocate_SVD = .false.
         STEPS = 500
         call init_lindblad_fit()
 
