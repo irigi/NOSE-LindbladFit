@@ -2,4 +2,6 @@ Debug/*mod
 Debug/*o
 Release/*mod
 Release/*o
-*out*dat
+*dat
+Release/NOSE-novy-LindbladFit
+Debug/NOSE-novy-LindbladFit

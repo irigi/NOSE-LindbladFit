@@ -15,13 +15,13 @@ module lindblad_fit_module
     complex(dpc), dimension(:,:), allocatable            :: Evops2, Devops2, AAA, VT, U
     real(dp), dimension(:), allocatable                  :: eigval
     integer(i4b)         :: Nl1, Nl2, Nl
-    character, parameter :: type = 'E'
+    character, parameter :: type = 'O'
     real(dp)             :: timeStep = 0
     character(len=64), parameter, private :: external_dir = "external", config_filename = "config.prm", directory = "."
 
     ! basis multiplier
     real(dp), parameter :: lindblad_basis_multiplier = 0.001
-    integer(i4b), public :: Nbasis = 99, STEPS = 500
+    integer(i4b), public :: STEPS = 500
 
     logical :: to_exciton_at_output = .false.
 
