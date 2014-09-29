@@ -12,10 +12,8 @@ module lindblad_fit_module
     real(dp), dimension(:,:), allocatable  :: Ham
     complex(dpc), allocatable:: rho1(:,:), prhox1(:,:), prhodx1(:,:)
     complex(dpc), dimension(:,:,:,:,:), allocatable      :: Evops, Devops
-    complex(dpc), dimension(:,:), allocatable            :: Evops2, Devops2, AAA, VT, U
-    real(dp), dimension(:), allocatable                  :: eigval
     integer(i4b)         :: Nl1, Nl2, Nl
-    character, parameter :: type = 'O'
+    character, parameter :: type = 'E'
     real(dp)             :: timeStep = 0
     character(len=64), parameter, private :: external_dir = "external", config_filename = "config.prm", directory = "."
 
@@ -37,7 +35,7 @@ module lindblad_fit_module
     ! Do all the simulations within the module
     !
     subroutine do_lindblad_fit_work()
-        integer(i4b) :: r,s,k,l,i
+        integer(i4b) :: i
 
         call init_lindblad_fit()
 
@@ -46,6 +44,12 @@ module lindblad_fit_module
         call open_files('r')
         call read_evops()
         call close_files('r')
+
+        if(to_exciton_at_output) then
+        do i=1, size(Evops,5)
+          call superops_to_exc(Evops(:,:,:,:,i), type)
+        end do
+        end if
 
         call evops_derivative()
         call calculate_coeff()
@@ -66,6 +70,24 @@ module lindblad_fit_module
 
     subroutine calculate_coeff()
         integer(i4b) :: tind, i
+        complex(dpc), dimension(:,:), allocatable            :: Evops2, Devops2, AAA, VT, U
+        real(dp), dimension(:), allocatable                  :: eigval
+
+        allocate(Evops2(Nl1*Nl2,Nl1*Nl2) )
+        allocate(DEvops2(Nl1*Nl2,Nl1*Nl2) )
+        allocate(AAA(Nl1*Nl2,Nl1*Nl2) )
+        allocate(VT(Nl1*Nl2,Nl1*Nl2) )
+        allocate(U(Nl1*Nl2,Nl1*Nl2) )
+
+        allocate(eigval(Nl1*Nl2) )
+
+        Evops2 = 0.0_dp
+        DEvops2 = 0.0_dp
+        AAA = 0.0_dp
+        VT = 0.0_dp
+        U = 0.0_dp
+
+        eigval = 0.0_dp
 
         do tind=1,STEPS
           call superops_4indexed_to_2indexed(Evops(:,:,:,:,tind),Evops2,type)
@@ -100,7 +122,7 @@ module lindblad_fit_module
 
           AAA = matmul(dEvops2,AAA)
 
-          call superops_2indexed_to_4indexed(AAA,Evops(:,:,:,:,tind),type)
+          call superops_2indexed_to_4indexed(AAA,DEvops(:,:,:,:,tind),type)
 
 
         end do
@@ -183,26 +205,12 @@ module lindblad_fit_module
         allocate(Evops(Nl1,Nl2,Nl1,Nl2,STEPS) )
         allocate(DEvops(Nl1,Nl2,Nl1,Nl2,STEPS) )
 
-        allocate(Evops2(Nl1*Nl2,Nl1*Nl2) )
-        allocate(DEvops2(Nl1*Nl2,Nl1*Nl2) )
-        allocate(AAA(Nl1*Nl2,Nl1*Nl2) )
-        allocate(VT(Nl1*Nl2,Nl1*Nl2) )
-        allocate(U(Nl1*Nl2,Nl1*Nl2) )
-        allocate(eigval(Nl1*Nl2) )
-
         rho1    = 0.0_dp
         prhox1  = 0.0_dp
         prhodx1 = 0.0_dp
 
         Evops = 0.0_dp
         DEvops = 0.0_dp
-
-        Evops2 = 0.0_dp
-        DEvops2 = 0.0_dp
-        AAA = 0.0_dp
-        VT = 0.0_dp
-        U = 0.0_dp
-        eigval = 0.0_dp
 
     end subroutine init_lindblad_fit
 
