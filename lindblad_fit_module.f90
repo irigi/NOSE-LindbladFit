@@ -51,6 +51,8 @@ module lindblad_fit_module
         end do
         end if
 
+        ! renormalization to take out any ununiqueness including test on general hermition initial condition
+        call renormalize_evops_and_test()
         call evops_derivative()
         call calculate_coeff()
 
@@ -159,6 +161,123 @@ module lindblad_fit_module
         call close_files('w')
 
     end subroutine only_convert_to_exciton
+
+    subroutine renormalize_evops()
+        integer(i4b) tind, i,j
+        complex(dpc), allocatable, dimension(:,:,:,:) :: EvopsTmp
+
+        if(type == 'E') then
+
+        allocate(EvopsTmp(size(Evops,1),size(Evops,2),size(Evops,3),size(Evops,4)))
+
+        do tind=1, size(Evops,5)
+
+            EvopsTmp = Evops(:,:,:,:,tind)
+
+        do j=1, N1_from_type(type)
+        do i=1, N1_from_type(type)
+
+            if(i == j) then
+                cycle
+            end if
+
+            EvopsTmp(j,i,j,i) = EvopsTmp(j,i,j,i) + conjg(Evops(i,j,j,i,tind))
+            EvopsTmp(i,j,j,i) = 0.0_dp
+
+
+        end do
+        end do
+
+            Evops(:,:,:,:,tind) = EvopsTmp
+
+        end do
+
+        deallocate(EvopsTmp)
+
+        end if
+    end subroutine renormalize_evops
+
+    subroutine renormalize_evops_and_test()
+        integer(i4b) tind, i,j,k,l
+        complex(dpc), dimension(Nl,Nl)      :: rho0, rho
+        real(dp), dimension(size(Evops,5))  :: testvec, testvec2
+
+
+
+        if(type == 'E') then
+
+        ! some quit arbitrary, but hermitian initial condition
+        rho0 = 0.0_dp
+        rho0(Nl,Nl) = 1
+        do i=1, Nl-1
+          rho0(i,i) = 1.0/(2.0**i) / 3
+          rho0(Nl,Nl) = rho0(Nl,Nl) - rho0(i,i)
+        end do
+
+        do i=1,Nl
+        do j=1,i-1
+          rho0(i,j) = sqrt(rho0(i,i)*rho0(j,j))*cmplx(1.0,0.5)/3.0
+          rho0(j,i) = conjg(rho0(i,j))
+        end do
+        end do
+        write(*,*) rho0
+
+
+
+        testvec = 0.0_dp
+
+        do tind = 1, size(Evops,5)
+
+        rho = 0.0_dp
+
+        do i=1,Nl
+        do j=1,Nl
+        do k=1,Nl
+        do l=1,Nl
+
+        rho(i,j) = rho(i,j) + Evops(i,j,k,l,tind) * rho0(k,l)
+
+        end do
+        end do
+        end do
+        end do
+
+        testvec(tind) = sum(abs(rho)**2)
+
+        end do
+
+
+        call renormalize_evops()
+
+        testvec2 = 0.0_dp
+
+        do tind = 1, size(Evops,5)
+
+        rho = 0.0_dp
+
+        do i=1,Nl
+        do j=1,Nl
+        do k=1,Nl
+        do l=1,Nl
+
+        rho(i,j) = rho(i,j) + Evops(i,j,k,l,tind) * rho0(k,l)
+
+        end do
+        end do
+        end do
+        end do
+
+        testvec2(tind) = sum(abs(rho)**2)
+
+        end do
+
+        write(*,*)  'before renormalization', dot_product(testvec,testvec)
+        write(*,*)  'after renormalization', dot_product(testvec2,testvec2)
+        write(*,*)  'difference after renormalization', dot_product(testvec-testvec2,testvec-testvec2)
+
+        end if
+
+    end subroutine renormalize_evops_and_test
 
     subroutine superindex_to_indices(super, i,j,k,l, tind)
       integer(i4b), intent(in)  :: super
