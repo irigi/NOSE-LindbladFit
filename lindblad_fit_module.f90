@@ -21,7 +21,7 @@ module lindblad_fit_module
     real(dp), parameter :: lindblad_basis_multiplier = 0.001
     integer(i4b), public :: STEPS = 500
 
-    logical :: to_exciton_at_output = .false.
+    logical :: to_exciton_at_output = .true.
 
     public::do_lindblad_fit_work
     public::indices_to_superindex
@@ -57,7 +57,7 @@ module lindblad_fit_module
         !write(*,*) 'OUTPUTTING EVOPS'
         call flush()
         call open_files('w')
-        call write_evops()
+        call write_evops('w')
         call close_files('w')
 
         !write(*,*) 'OUTPUTTING EVOPS'
@@ -65,6 +65,15 @@ module lindblad_fit_module
         call open_files('D')
         call write_devops()
         call close_files('D')
+
+        call reintegrate()
+
+        !write(*,*) 'OUTPUTTING REINTEGRATED EVOPS'
+        call flush()
+        call open_files('i')
+        call write_evops('i')
+        call close_files('i')
+
 
     end subroutine do_lindblad_fit_work
 
@@ -146,7 +155,7 @@ module lindblad_fit_module
         write(*,*) 'OUTPUTTING EVOPS'
         call flush()
         call open_files('w')
-        call write_evops()
+        call write_evops('w')
         call close_files('w')
 
     end subroutine only_convert_to_exciton
@@ -254,6 +263,8 @@ module lindblad_fit_module
         res = res + 10000
       elseif(code == 'D') then
         res = res + 20000
+      elseif(code == 'i') then
+        res = res + 5000
       end if
 
     end function ind
@@ -311,9 +322,10 @@ module lindblad_fit_module
       end do
     end subroutine read_evops
 
-    subroutine write_evops()
-      integer (i4b)       :: i, file_ios
-      integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2
+    subroutine write_evops(code)
+      integer (i4b)          :: i, file_ios
+      integer(i4b)           :: Uelement, Uelement2,Utnemele,Utnemele2
+      character, intent(in)  :: code
 
       do i=1,size(Evops,5)
       do Uelement=1,Nl1
@@ -322,7 +334,7 @@ module lindblad_fit_module
       do Utnemele2=1,Nl2
 
 
-        write(ind(Uelement,Uelement2,Utnemele,Utnemele2,'w'),*, IOSTAT=file_ios) timeStep*(i-1),              &
+        write(ind(Uelement,Uelement2,Utnemele,Utnemele2,code),*, IOSTAT=file_ios) timeStep*(i-1),              &
                         real(Evops(Uelement,Uelement2,Utnemele,Utnemele2,i)),                                 &
                         aimag(Evops(Uelement,Uelement2,Utnemele,Utnemele2,i))
 
@@ -380,6 +392,24 @@ module lindblad_fit_module
         prefix = 'Evops_eg'
       end if
 
+      if(code == 'D') then
+        if (type == '2') then
+          prefix = 'Diss_fe'
+        else if (type == 'E') then
+          prefix = 'Diss_ee'
+        else if (type == 'O') then
+          prefix = 'Diss_eg'
+        end if
+      elseif(code == 'i') then
+        if (type == '2') then
+          prefix = 'Evops-Reintegrated_fe'
+        else if (type == 'E') then
+          prefix = 'Evops-Reintegrated_ee'
+        else if (type == 'O') then
+          prefix = 'Evops-Reintegrated_eg'
+        end if
+      end if
+
       do Uelement=1,Nl1
       do Uelement2=1,Nl2
       do Utnemele=1,Nl1
@@ -420,19 +450,7 @@ module lindblad_fit_module
         name = trim(prefix) // trim(no1) // '-'//trim(no2)//'--'// trim(no3) // '-'//trim(no4)//'.dat'
         open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,code), FILE = trim(name), STATUS='OLD', ACTION='READ')
 
-      elseif(code == 'w') then
-
-        name = trim(prefix) // trim(no1) // '-'//trim(no2)//'--'// trim(no3) // '-'//trim(no4)//'-out.dat'
-        open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,code), FILE = trim(name))
-
-      elseif(code == 'D') then
-        if (type == '2') then
-          prefix = 'Diss_fe'
-        else if (type == 'E') then
-          prefix = 'Diss_ee'
-        else if (type == 'O') then
-          prefix = 'Diss_eg'
-        end if
+      else
 
         name = trim(prefix) // trim(no1) // '-'//trim(no2)//'--'// trim(no3) // '-'//trim(no4)//'-out.dat'
         open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,code), FILE = trim(name))
@@ -570,10 +588,45 @@ module lindblad_fit_module
         write(*,*) 'OUTPUTTING EVOPS'
         call flush()
         call open_files('w')
-        call write_evops()
+        call write_evops('w')
         call close_files('w')
 
     end subroutine rates_to_evops
+
+    subroutine reintegrate()
+        integer(i4b) :: i,j,tind,u,v,k,l
+
+        Evops = 0.0_dp
+
+        do i=1,size(Evops,1)
+        do j=1,size(Evops,2)
+            Evops(i,j,i,j,1) = 1.0_dp
+        end do
+        end do
+
+        do tind=2,size(Evops,5)
+
+        do i=1,size(Evops,1)
+        do j=1,size(Evops,2)
+        do k=1,size(Evops,1)
+        do l=1,size(Evops,2)
+
+            Evops(i,j,k,l,tind) = Evops(i,j,k,l,tind-1)
+
+        do u=1,size(Evops,1)
+        do v=1,size(Evops,2)
+            Evops(i,j,k,l,tind) = Evops(i,j,k,l,tind) + &
+                    (DEvops(i,j,u,v,tind-1) + DEvops(i,j,u,v,tind)) / 2.0 * Evops(u,v,k,l,tind-1) * timeStep
+        end do
+        end do
+        end do
+        end do
+        end do
+        end do
+
+        end do
+
+    end subroutine reintegrate
 
 end module lindblad_fit_module
 
