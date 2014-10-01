@@ -68,6 +68,8 @@ module lindblad_fit_module
         call write_devops()
         call close_files('D')
 
+        call secularize_devops()
+
         call reintegrate()
 
         !write(*,*) 'OUTPUTTING REINTEGRATED EVOPS'
@@ -278,6 +280,29 @@ module lindblad_fit_module
         end if
 
     end subroutine renormalize_evops_and_test
+
+    subroutine secularize_devops()
+        integer(i4b) tind, i,j,k,l
+
+        do tind=1, size(DEvops,5)
+        do i=1, size(DEvops,1)
+        do j=1, size(DEvops,2)
+        do k=1, size(DEvops,3)
+        do l=1, size(DEvops,4)
+
+            if((i == j .and. k ==l) .or. (i /= j .and. i == k .and. j == l)) then
+              cycle
+            end if
+
+            DEvops(i,j,k,l,tind) = 0.0_dp
+
+        end do
+        end do
+        end do
+        end do
+        end do
+
+    end subroutine secularize_devops
 
     subroutine superindex_to_indices(super, i,j,k,l, tind)
       integer(i4b), intent(in)  :: super
