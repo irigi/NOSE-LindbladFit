@@ -121,7 +121,7 @@ module lindblad_fit_module
               EIGVAL(i) = 1.0_dp / EIGVAL(i)
             else
               EIGVAL(i) = 0.0_dp
-	      MAXOUTIND = min(MAXOUTIND,tind)
+	          MAXOUTIND = min(MAXOUTIND,tind - 1)
             end if
           end do
 
