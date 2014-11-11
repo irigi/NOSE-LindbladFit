@@ -430,6 +430,7 @@ module lindblad_fit_module
       DEvops(i,j,k,l,1) = DEvops(i,j,k,l,2) - (DEvops(i,j,k,l,3)-DEvops(i,j,k,l,2))
       DEvops(i,j,k,l,size(Evops,5)) = DEvops(i,j,k,l,size(Evops,5)-1) + (DEvops(i,j,k,l,size(Evops,5)-1)-DEvops(i,j,k,l,size(Evops,5)-2))
 
+
       end do
       end do
       end do
@@ -491,19 +492,19 @@ module lindblad_fit_module
     end subroutine write_evops
 
     subroutine write_devops()
-      integer (i4b)       :: i, file_ios
+      integer (i4b)       :: tind, file_ios
       integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2
 
-      do i=1,MAXOUTIND
+      do tind=1,MAXOUTIND
       do Uelement=1,Nl1
       do Uelement2=1,Nl2
       do Utnemele=1,Nl1
       do Utnemele2=1,Nl2
 
 
-        write(ind(Uelement,Uelement2,Utnemele,Utnemele2,'D'),*, IOSTAT=file_ios) timeStep*(i-1),              &
-                        real(dEvops(Uelement,Uelement2,Utnemele,Utnemele2,i)),                                 &
-                        aimag(dEvops(Uelement,Uelement2,Utnemele,Utnemele2,i))
+        write(ind(Uelement,Uelement2,Utnemele,Utnemele2,'D'),*, IOSTAT=file_ios) timeStep*(tind-1),              &
+                        real(dEvops(Uelement,Uelement2,Utnemele,Utnemele2,tind)),                                 &
+                        aimag(dEvops(Uelement,Uelement2,Utnemele,Utnemele2,tind))
 
       end do
       end do
