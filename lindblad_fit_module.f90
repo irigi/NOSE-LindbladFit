@@ -19,7 +19,7 @@ module lindblad_fit_module
 
     ! basis multiplier
     real(dp), parameter :: lindblad_basis_multiplier = 0.001
-    integer(i4b), public :: STEPS = 500
+    integer(i4b), public :: STEPS = 500, MAXOUTIND
 
     logical :: to_exciton_at_output = .true.
 
@@ -121,6 +121,7 @@ module lindblad_fit_module
               EIGVAL(i) = 1.0_dp / EIGVAL(i)
             else
               EIGVAL(i) = 0.0_dp
+	      MAXOUTIND = min(MAXOUTIND,tind)
             end if
           end do
 
@@ -471,7 +472,7 @@ module lindblad_fit_module
       integer(i4b)           :: Uelement, Uelement2,Utnemele,Utnemele2
       character, intent(in)  :: code
 
-      do i=1,size(Evops,5)
+      do i=1,MAXOUTIND
       do Uelement=1,Nl1
       do Uelement2=1,Nl2
       do Utnemele=1,Nl1
@@ -493,7 +494,7 @@ module lindblad_fit_module
       integer (i4b)       :: i, file_ios
       integer(i4b)        :: Uelement, Uelement2,Utnemele,Utnemele2
 
-      do i=1,size(dEvops,5)
+      do i=1,MAXOUTIND
       do Uelement=1,Nl1
       do Uelement2=1,Nl2
       do Utnemele=1,Nl1

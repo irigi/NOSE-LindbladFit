@@ -28,6 +28,7 @@ program LindbladFit
   else
     !read( args(1), '(i10)' ) Nbasis
     read( args(1), '(i10)' ) STEPS
+    MAXOUTIND = STEPS
   end if
 
   call do_lindblad_fit_work()
