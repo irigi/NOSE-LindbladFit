@@ -484,6 +484,94 @@ module nakajima_zwanzig_shared
 
     end subroutine superops_2indexed_to_4indexed
 
+    subroutine superops_4indexed_to_2indexed_updiag(from, to, type)
+        complex(dpc), dimension(:,:,:,:), intent(in)        :: from
+        character, intent(in)                               :: type
+
+        complex(dpc), dimension(:,:), intent(out) :: to
+        integer(i4b) :: i,j,k,l,  first_N, second_N,  supI, supJ
+
+        if(.not.(size(to,1) == size(to,2) .and. (N1_from_type(type) == N2_from_type(type)) .and. (N1_from_type(type)*(N1_from_type(type)+1)/2 == size(to,1)) .and. &
+            (size(from,1) == size(from,3)) .and. (size(from,2) == size(from,4)) .and. (size(from,1) == N1_from_type(type)) &
+            .and. (size(from,2) == N2_from_type(type)) )) then
+
+            write(*,*) "superops_4indexed_to_2indexed_updiag - size error", size(from,1), size(from,2)
+            stop
+        end if
+
+        to = 0.0_dp
+
+        first_N  = N1_from_type(type)
+        second_N = N2_from_type(type)
+
+        supJ = 0
+
+        do l=1, first_N
+        do k=1, l
+
+        supJ = supJ + 1
+        supI = 0
+
+        do j=1, first_N
+        do i=1, j
+
+        supI = supI + 1
+
+        to(supI,supJ) = from(i,j,k,l)
+        !write(*,*) supI,supJ, 'XX', i,j,k,l
+
+        end do
+        end do
+
+        end do
+        end do
+
+    end subroutine superops_4indexed_to_2indexed_updiag
+
+
+    subroutine superops_2indexed_to_4indexed_updiag(from, to, type)
+        complex(dpc), dimension(:,:), intent(in)        :: from
+        character, intent(in)                           :: type
+
+        complex(dpc), dimension(:,:,:,:), intent(out) :: to
+        integer(i4b) :: i,j,k,l,  first_N, second_N,  supI, supJ
+
+        if(.not.(size(from,1) == size(from,2) .and. (N1_from_type(type) == N2_from_type(type)) .and. (N1_from_type(type)*(N1_from_type(type)+1)/2 == size(from,1)) .and. &
+            (size(to,1) == size(to,3)) .and. (size(to,2) == size(to,4)) .and. (size(to,1) == N1_from_type(type)) &
+            .and. (size(to,2) == N2_from_type(type)) )) then
+
+            write(*,*) "superops_2indexed_to_4indexed_updiag - size error", size(from,1), size(from,2)
+            stop
+        end if
+
+        to = 0.0_dp
+
+        first_N  = N1_from_type(type)
+        second_N = N2_from_type(type)
+
+        supJ = 0
+
+        do l=1, first_N
+        do k=1, l
+
+        supI = 0
+        supJ = supJ + 1
+
+        do j=1, first_N
+        do i=1, j
+
+        supI = supI + 1
+
+        to(i,j,k,l) = from(supI,supJ)
+
+        end do
+        end do
+
+        end do
+        end do
+
+    end subroutine superops_2indexed_to_4indexed_updiag
+
 !    subroutine redfield_from_evops(from, to, type, tstep)
 !        complex(dpc), dimension(:,:,:,:,:), intent(in)    :: from
 !        complex(dpc), dimension(:,:,:,:,:), intent(out)    :: to

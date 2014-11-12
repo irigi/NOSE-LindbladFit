@@ -81,14 +81,15 @@ module lindblad_fit_module
 
     end subroutine do_lindblad_fit_work
 
-    subroutine calculate_coeff()
+    subroutine calculate_coeff_O()
         integer(i4b) :: tind, i
-        complex(dpc), dimension(:,:), allocatable            :: Evops2, Devops2, AAA, VT, U
+        complex(dpc), dimension(:,:), allocatable            :: Evops2, Devops2, AAA, VT, U, TMP
         real(dp), dimension(:), allocatable                  :: eigval
 
         allocate(Evops2(Nl1*Nl2,Nl1*Nl2) )
         allocate(DEvops2(Nl1*Nl2,Nl1*Nl2) )
         allocate(AAA(Nl1*Nl2,Nl1*Nl2) )
+        allocate(TMP(Nl1*Nl2,Nl1*Nl2) )
         allocate(VT(Nl1*Nl2,Nl1*Nl2) )
         allocate(U(Nl1*Nl2,Nl1*Nl2) )
 
@@ -97,6 +98,7 @@ module lindblad_fit_module
         Evops2 = 0.0_dp
         DEvops2 = 0.0_dp
         AAA = 0.0_dp
+        TMP = 0.0_dp
         VT = 0.0_dp
         U = 0.0_dp
 
@@ -121,10 +123,11 @@ module lindblad_fit_module
               EIGVAL(i) = 1.0_dp / EIGVAL(i)
             else
               EIGVAL(i) = 0.0_dp
-	          MAXOUTIND = min(MAXOUTIND,tind - 1)
+              MAXOUTIND = min(MAXOUTIND,tind - 1)
             end if
           end do
 
+          write(*,*) 'MAXOUTIND', MAXOUTIND
           !write(*,*) EIGVAL
 
           AAA = 0.0_dp
@@ -134,12 +137,120 @@ module lindblad_fit_module
 
           AAA = matmul(conjg(transpose(VT)),matmul(AAA, transpose(conjg(U))))
 
-          AAA = matmul(dEvops2,AAA)
+          TMP = matmul(dEvops2,AAA)
 
-          call superops_2indexed_to_4indexed(AAA,DEvops(:,:,:,:,tind),type)
+          call superops_2indexed_to_4indexed(TMP,DEvops(:,:,:,:,tind),type)
 
 
         end do
+
+        deallocate(Evops2)
+        deallocate(DEvops2)
+        deallocate(AAA)
+        deallocate(TMP)
+        deallocate(VT)
+        deallocate(U)
+
+        deallocate(eigval)
+    end subroutine calculate_coeff_O
+
+    subroutine calculate_coeff()
+        integer(i4b) :: tind, i
+        complex(dpc), dimension(:,:), allocatable            :: Evops2, Devops2, AAA, VT, U, TMP
+        real(dp), dimension(:), allocatable                  :: eigval
+
+        real(dp)                                             :: x
+
+        if(Nl1 /= Nl2) then
+          write(*,*) 'wrong dimension in calculate_coeff'
+          stop
+        end if
+
+        allocate(Evops2(Nl1*(Nl1+1)/2,Nl1*(Nl1+1)/2) )
+        allocate(DEvops2(Nl1*(Nl1+1)/2,Nl1*(Nl1+1)/2) )
+        allocate(AAA(Nl1*(Nl1+1)/2,Nl1*(Nl1+1)/2) )
+        allocate(TMP(Nl1*(Nl1+1)/2,Nl1*(Nl1+1)/2) )
+        allocate(VT(Nl1*(Nl1+1)/2,Nl1*(Nl1+1)/2) )
+        allocate(U(Nl1*(Nl1+1)/2,Nl1*(Nl1+1)/2) )
+
+        allocate(eigval(Nl1*(Nl1+1)/2) )
+
+        Evops2 = 0.0_dp
+        DEvops2 = 0.0_dp
+        AAA = 0.0_dp
+        TMP = 0.0_dp
+        VT = 0.0_dp
+        U = 0.0_dp
+
+        eigval = 0.0_dp
+
+        do tind=1,STEPS
+          call superops_4indexed_to_2indexed_updiag(Evops(:,:,:,:,tind),Evops2,type)
+          call superops_4indexed_to_2indexed_updiag(DEvops(:,:,:,:,tind),DEvops2,type)
+
+          !write(*,*) real(Evops2)
+          !write(*,*)
+
+          call svd(Evops2,U,EIGVAL,VT)
+
+          !write(*,*) EIGVAL
+
+          if(EIGVAL(1) <= 0) then
+            write(*,*) 'terrible error in SVD'
+            stop
+          end if
+
+          ! reciprocal eigvals
+          do i=1, size(EIGVAL)
+            if(EIGVAL(i)/EIGVAL(1) > 1e-7*size(EIGVAL)) then
+              EIGVAL(i) = 1.0_dp / EIGVAL(i)
+            else
+              EIGVAL(i) = 0.0_dp
+              MAXOUTIND = min(MAXOUTIND,tind - 1)
+            end if
+          end do
+
+          write(*,*) 'MAXOUTIND', MAXOUTIND
+          !write(*,*) EIGVAL
+
+          AAA = 0.0_dp
+          do i=1, size(AAA,1)
+            AAA(i,i) = EIGVAL(i)
+          end do
+
+          AAA = matmul(conjg(transpose(VT)),matmul(AAA, transpose(conjg(U))))
+
+          ! independent check
+          TMP = matmul(AAA,Evops2)
+          do i=1, size(AAA,1)
+            TMP(i,i) = TMP(i,i) - 1.0_dp
+          end do
+          if(tind < MAXOUTIND) then
+            !write(*,*) 'dist', tind, maxval(abs(TMP))
+            !write(*,*)
+          end if
+          x = maxval(abs(TMP))
+
+          TMP = matmul(dEvops2,AAA)
+          if(tind < MAXOUTIND .and. maxval(abs(TMP)) > 1) then
+            write(*,*) 'dist', tind, x
+            write(*,*) 'Diss', tind, maxval(abs(TMP))
+            write(*,*)
+          end if
+
+          call superops_2indexed_to_4indexed_updiag(TMP,DEvops(:,:,:,:,tind),type)
+
+
+        end do
+
+        deallocate(Evops2)
+        deallocate(DEvops2)
+        deallocate(AAA)
+        deallocate(TMP)
+        deallocate(VT)
+        deallocate(U)
+
+        deallocate(eigval)
     end subroutine calculate_coeff
 
     subroutine only_convert_to_exciton()
@@ -166,7 +277,7 @@ module lindblad_fit_module
     end subroutine only_convert_to_exciton
 
     subroutine renormalize_evops()
-        integer(i4b) tind, i,j
+        integer(i4b) tind, i,j,k,l
         complex(dpc), allocatable, dimension(:,:,:,:) :: EvopsTmp
 
         if(type == 'E') then
@@ -187,11 +298,16 @@ module lindblad_fit_module
             EvopsTmp(j,i,j,i) = EvopsTmp(j,i,j,i) + conjg(Evops(i,j,j,i,tind))
             EvopsTmp(i,j,j,i) = 0.0_dp
 
+            do k=1, N1_from_type(type)
+                EvopsTmp(k,k,j,i) = real(EvopsTmp(k,k,j,i))
+            end do
+
 
         end do
         end do
 
             Evops(:,:,:,:,tind) = EvopsTmp
+            !write(*,*) tind, Evops(2,1,1,1,tind)
 
         end do
 
