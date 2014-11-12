@@ -68,7 +68,11 @@ module lindblad_fit_module
         call write_devops()
         call close_files('D')
 
+        call thermal_state()
+
         call secularize_devops()
+
+        call thermal_state()
 
         call reintegrate()
 
@@ -867,6 +871,23 @@ module lindblad_fit_module
         end do
         end do
 
+        ! check integrability
+        do tind=2,size(Evops,5)
+
+        do i=1,size(Evops,1)
+        do j=1,size(Evops,2)
+        do k=1,size(Evops,1)
+        do l=1,size(Evops,2)
+            if(abs(DEvops(i,j,k,l,tind)) > 1.0 / timeStep / 10) then
+              MAXOUTIND = min(MAXOUTIND, tind)
+            end if
+        end do
+        end do
+        end do
+        end do
+
+        end do
+
         do tind=2,size(Evops,5)
 
         do i=1,size(Evops,1)
@@ -922,6 +943,36 @@ module lindblad_fit_module
         end do
 
     end subroutine reintegrate
+
+
+    subroutine thermal_state
+        integer(i4b) :: i
+        complex(dpc), dimension(:,:), allocatable            :: Devops2
+        complex(dpc), dimension(:), allocatable              :: vec
+
+        allocate(DEvops2(Nl1*Nl2,Nl1*Nl2) )
+        allocate(vec(Nl1*Nl2) )
+
+        DEvops2 = 0.0_dp
+        call superops_4indexed_to_2indexed(DEvops(:,:,:,:,max(1,MAXOUTIND-1)),DEvops2,type)
+
+        DEvops2 = DEvops2 * 1000000
+        call matrix_exp(DEvops2)
+
+        do i=1, size(vec)
+          vec = 1.0_dp / Nl1
+        end do
+
+        vec = matmul(DEvops2,vec)
+
+        write(*,*) '---r>', real(vec)
+        write(*,*) '---i>', aimag(vec)
+        write(*,*)
+
+        deallocate(DEvops2)
+        deallocate(vec)
+
+    end subroutine thermal_state
 
 end module lindblad_fit_module
 
