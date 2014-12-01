@@ -283,6 +283,9 @@ module lindblad_fit_module
     subroutine renormalize_evops()
         integer(i4b) tind, i,j,k,l
         complex(dpc), allocatable, dimension(:,:,:,:) :: EvopsTmp
+        integer(i4b), dimension(size(Evops,1),size(Evops,2),size(Evops,3),size(Evops,4)) :: tmp
+
+        tmp = 0
 
         if(type == 'E') then
 
@@ -299,11 +302,32 @@ module lindblad_fit_module
                 cycle
             end if
 
-            EvopsTmp(j,i,j,i) = EvopsTmp(j,i,j,i) + conjg(Evops(i,j,j,i,tind))
-            EvopsTmp(i,j,j,i) = 0.0_dp
+            do l=1, N1_from_type(type)
+            do k=1, N1_from_type(type)
+
+            if((i < j .and. k >= l) .or. (j < i .and. l >= k) ) then
+                cycle
+            end if
+
+
+            EvopsTmp(l,k,j,i) = EvopsTmp(l,k,j,i) + conjg(Evops(k,l,j,i,tind))
+            EvopsTmp(k,l,j,i) = 0.0_dp
+
+            if(tmp(k,l,j,i) == 0) then
+                write(*,*) 'removing Evops', k,l,j,i
+                tmp(k,l,j,i) = 1
+            end if
+
+            end do
+            end do
 
             do k=1, N1_from_type(type)
                 EvopsTmp(k,k,j,i) = real(EvopsTmp(k,k,j,i))
+
+                if(tmp(k,k,j,i) == 0) then
+                        write(*,*) 'realing Evops', k,k,j,i
+                        tmp(k,k,j,i) = 1
+                end if
             end do
 
 
@@ -589,11 +613,17 @@ module lindblad_fit_module
     end subroutine read_evops
 
     subroutine write_evops(code)
-      integer (i4b)          :: i, file_ios
+      integer (i4b)          :: i, file_ios, LIMIT
       integer(i4b)           :: Uelement, Uelement2,Utnemele,Utnemele2
       character, intent(in)  :: code
 
-      do i=1,MAXOUTIND
+      LIMIT = MAXOUTIND
+
+      if(code == 'w') then
+              LIMIT = size(Evops,5)
+      end if
+
+      do i=1,LIMIT
       do Uelement=1,Nl1
       do Uelement2=1,Nl2
       do Utnemele=1,Nl1
