@@ -20,14 +20,15 @@ program LindbladFit
       call get_command_argument(ix,args(ix))
   end do
 
-  if(num_args /= 2) then
+  if(num_args /= 1) then
     call rates_to_evops()
     !call only_convert_to_exciton()
     write(*,*) 'wrong number of arguments'
     stop
   else
-    read( args(1), '(i10)' ) Nbasis
-    read( args(2), '(i10)' ) STEPS
+    !read( args(1), '(i10)' ) Nbasis
+    read( args(1), '(i10)' ) STEPS
+    MAXOUTIND = STEPS
   end if
 
   call do_lindblad_fit_work()
