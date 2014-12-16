@@ -594,8 +594,16 @@ module lindblad_fit_module
       do Utnemele=1,Nl1
       do Utnemele2=1,Nl2
 
+        if(type == 'E' .and. Utnemele > Utnemele2) then
+          cycle
+        end if
+
         read(ind(Uelement,Uelement2,Utnemele,Utnemele2,'r'),*, IOSTAT=file_ios) time, a, b
         Evops(Uelement,Uelement2,Utnemele,Utnemele2,i) = a + b * cmplx(0,1)
+
+        if(type == 'E') then
+          Evops(Uelement2,Uelement,Utnemele2,Utnemele,i) = a - b * cmplx(0,1)
+        end if
 
         ! read timestep from the Evops
         if(i == 1 .and. Uelement == 1 .and. Uelement2 == 1 .and. Utnemele == 1 .and. Utnemele2 == 1) then
@@ -742,6 +750,10 @@ module lindblad_fit_module
       endif
 
       if(code == 'r') then
+
+        if(type == 'E' .and. Utnemele > Utnemele2) then
+          cycle
+        end if
 
         name = trim(prefix) // trim(no1) // '-'//trim(no2)//'--'// trim(no3) // '-'//trim(no4)//'.dat'
         open(UNIT=ind(Uelement,Uelement2,Utnemele,Utnemele2,code), FILE = trim(name), STATUS='OLD', ACTION='READ')
