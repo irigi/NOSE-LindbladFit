@@ -13,7 +13,7 @@ module lindblad_fit_module
     complex(dpc), allocatable:: rho1(:,:), prhox1(:,:), prhodx1(:,:)
     complex(dpc), dimension(:,:,:,:,:), allocatable      :: Evops, Devops
     integer(i4b)         :: Nl1, Nl2, Nl
-    character, parameter :: type = 'E'
+    character, parameter :: type = 'O'
     real(dp)             :: timeStep = 0
     character(len=64), parameter, private :: external_dir = "external", config_filename = "config.prm", directory = "."
 
@@ -57,13 +57,13 @@ module lindblad_fit_module
         call calculate_coeff()
 
         !write(*,*) 'OUTPUTTING EVOPS'
-        call flush()
+        !call flush()
         call open_files('w')
         call write_evops('w')
         call close_files('w')
 
         !write(*,*) 'OUTPUTTING EVOPS'
-        call flush()
+        !call flush()
         call open_files('D')
         call write_devops()
         call close_files('D')
@@ -721,37 +721,37 @@ module lindblad_fit_module
 
 
       if(Uelement < 10) then
-        write(no1,'(i1)')   Uelement
+        write(no2,'(i1)')   Uelement
       else if (Uelement < 100) then
-        write(no1,'(i2)')   Uelement
+        write(no2,'(i2)')   Uelement
       else
-        write(no1,'(i3)')   Uelement
+        write(no2,'(i3)')   Uelement
       endif
       if(Uelement2 < 10) then
-        write(no2,'(i1)')   Uelement2
+        write(no1,'(i1)')   Uelement2
       else if (Uelement2 < 100) then
-        write(no2,'(i2)')   Uelement2
+        write(no1,'(i2)')   Uelement2
       else
-        write(no2,'(i3)')   Uelement2
+        write(no1,'(i3)')   Uelement2
       endif
       if(Utnemele < 10) then
-        write(no3,'(i1)')   Utnemele
+        write(no4,'(i1)')   Utnemele
       else if (Uelement2 < 100) then
-        write(no3,'(i2)')   Utnemele
+        write(no4,'(i2)')   Utnemele
       else
-        write(no3,'(i3)')   Utnemele
+        write(no4,'(i3)')   Utnemele
       endif
       if(Utnemele2 < 10) then
-        write(no4,'(i1)')   Utnemele2
+        write(no3,'(i1)')   Utnemele2
       else if (Uelement2 < 100) then
-        write(no4,'(i2)')   Utnemele2
+        write(no3,'(i2)')   Utnemele2
       else
-        write(no4,'(i3)')   Utnemele2
+        write(no3,'(i3)')   Utnemele2
       endif
 
       if(code == 'r') then
 
-        if(type == 'E' .and. Utnemele > Utnemele2) then
+        if(type == 'E' .and. Utnemele < Utnemele2) then
           cycle
         end if
 
